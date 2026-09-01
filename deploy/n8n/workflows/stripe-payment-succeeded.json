@@ -1,0 +1,138 @@
+{
+  "name": "stripe payment succeeded → Twenty Won + Teams",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stripe-payment-succeeded",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a3000003-0003-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "stripe-payment-succeeded"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst eventType = body.type ?? body.eventType ?? '';\nconst payment = body.data?.object ?? body.data ?? body;\nconst metadata = payment.metadata ?? {};\nconst opportunityId =\n  metadata.opportunityId ?? metadata.opportunity_id ?? metadata.dealId ?? '';\nconst amountCents = Number(payment.amount ?? 0);\nconst currency = String(payment.currency ?? '').toUpperCase();\nconst amountLabel =\n  amountCents > 0\n    ? `${(amountCents / 100).toFixed(2)} ${currency}`.trim()\n    : '';\nconst isSucceeded =\n  eventType === 'payment_intent.succeeded' ||\n  eventType === 'checkout.session.completed' ||\n  Boolean(opportunityId && payment.id);\nconst wonStage = $env.TWENTY_WON_STAGE || 'WON';\n\nconst teamsPayload = {\n  type: 'message',\n  attachments: [\n    {\n      contentType: 'application/vnd.microsoft.card.adaptive',\n      content: {\n        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',\n        type: 'AdaptiveCard',\n        version: '1.4',\n        body: [\n          {\n            type: 'TextBlock',\n            text: '🎉 Deal Won',\n            weight: 'Bolder',\n            size: 'Medium',\n            color: 'Good',\n          },\n          {\n            type: 'FactSet',\n            facts: [\n              { title: 'Deal', value: String(opportunityId || 'unknown') },\n              { title: 'Value', value: String(amountLabel) },\n              { title: 'Stripe', value: String(payment.id ?? '') },\n            ],\n          },\n        ],\n      },\n    },\n  ],\n};\n\nreturn [\n  {\n    json: {\n      isSucceeded,\n      opportunityId,\n      amountLabel,\n      stripePaymentId: payment.id ?? null,\n      teamsPayload,\n      graphqlBody: {\n        query:\n          'mutation UpdateOpportunityWon($id: UUID!, $data: OpportunityUpdateInput!) { updateOpportunity(id: $id, data: $data) { id stage } }',\n        variables: {\n          id: opportunityId,\n          data: { stage: wonStage },\n        },\n      },\n    },\n  },\n];"
+      },
+      "id": "a3000003-0003-4000-8000-000000000002",
+      "name": "Normalize Stripe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-stripe-ok",
+              "leftValue": "={{ $json.isSucceeded && $json.opportunityId }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a3000003-0003-4000-8000-000000000003",
+      "name": "IF payment succeeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.graphqlBody) }}",
+        "options": {}
+      },
+      "id": "a3000003-0003-4000-8000-000000000004",
+      "name": "Twenty GraphQL Won",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_BD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Normalize Stripe').first().json.teamsPayload) }}",
+        "options": {}
+      },
+      "id": "a3000003-0003-4000-8000-000000000005",
+      "name": "Teams Adaptive Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, -80]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Normalize Stripe", "type": "main", "index": 0 }]]
+    },
+    "Normalize Stripe": {
+      "main": [[{ "node": "IF payment succeeded", "type": "main", "index": 0 }]]
+    },
+    "IF payment succeeded": {
+      "main": [
+        [{ "node": "Twenty GraphQL Won", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Twenty GraphQL Won": {
+      "main": [[{ "node": "Teams Adaptive Card", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

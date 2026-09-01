@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="48" viewBox="0 0 280 48" role="img" aria-label="Arcloops CRM">
+  <text
+    x="0"
+    y="34"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+    font-size="32"
+    font-weight="700"
+  >
+    <tspan fill="#0A66C2">Arc</tspan><tspan fill="#2DB012">loops</tspan>
+  </text>
+</svg>

@@ -1,0 +1,75 @@
+{
+  "name": "twenty-contact-created → Brevo list",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twenty-contact-created",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1000001-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "twenty-contact-created"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst record = body.record ?? body;\nconst emails = record.emails ?? {};\nconst name = record.name ?? {};\nconst email =\n  emails.primaryEmail ??\n  record.email ??\n  (Array.isArray(emails) ? emails[0] : '') ??\n  '';\nconst firstName = name.firstName ?? record.firstName ?? '';\nconst lastName = name.lastName ?? record.lastName ?? '';\n\nif (!email) {\n  throw new Error('Twenty person payload has no primaryEmail');\n}\n\nconst listIdRaw = $env.BREVO_CRM_LIST_ID;\nconst listIds = listIdRaw ? [Number(listIdRaw)] : [];\n\nreturn [\n  {\n    json: {\n      email,\n      firstName,\n      lastName,\n      companyId: record.companyId ?? null,\n      personId: record.id ?? null,\n      brevoBody: {\n        email,\n        attributes: {\n          FIRSTNAME: firstName,\n          LASTNAME: lastName,\n        },\n        listIds,\n        updateEnabled: true,\n      },\n    },\n  },\n];"
+      },
+      "id": "a1000001-0001-4000-8000-000000000002",
+      "name": "Normalize person",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/contacts",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.BREVO_API_KEY }}"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.brevoBody) }}",
+        "options": {}
+      },
+      "id": "a1000001-0001-4000-8000-000000000003",
+      "name": "Brevo add to list",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Normalize person", "type": "main", "index": 0 }]]
+    },
+    "Normalize person": {
+      "main": [[{ "node": "Brevo add to list", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

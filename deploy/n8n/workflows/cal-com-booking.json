@@ -1,0 +1,162 @@
+{
+  "name": "cal.com booking → Twenty activity",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cal-com-booking",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a4000004-0004-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "cal-com-booking"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst payload = body.payload ?? body;\nconst attendees = payload.attendees ?? payload.responses?.attendees ?? [];\nconst firstAttendee = Array.isArray(attendees) ? attendees[0] ?? {} : {};\nconst email =\n  firstAttendee.email ??\n  payload.email ??\n  payload.responses?.email?.value ??\n  '';\nconst attendeeName = firstAttendee.name ?? payload.name ?? email;\nconst title = payload.title ?? payload.eventTitle ?? 'Cal.com booking';\nconst startTime = payload.startTime ?? payload.start ?? '';\n\nif (!email) {\n  throw new Error('Cal.com payload has no attendee email');\n}\n\nreturn [\n  {\n    json: {\n      email,\n      attendeeName,\n      title,\n      startTime,\n      findPersonBody: {\n        query:\n          'query PersonByEmail($email: String!) { people(filter: { emails: { primaryEmail: { eq: $email } } }, first: 1) { edges { node { id companyId name { firstName lastName } } } } }',\n        variables: { email },\n      },\n    },\n  },\n];"
+      },
+      "id": "a4000004-0004-4000-8000-000000000002",
+      "name": "Normalize booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.findPersonBody) }}",
+        "options": {}
+      },
+      "id": "a4000004-0004-4000-8000-000000000003",
+      "name": "Find person by email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const booking = $('Normalize booking').first().json;\nconst gql = $input.first().json;\nconst person = gql.data?.people?.edges?.[0]?.node ?? null;\n\nif (!person?.id) {\n  throw new Error(`No Twenty person for ${booking.email}`);\n}\n\nconst markdown = [\n  `Cal.com: ${booking.title}`,\n  booking.startTime ? `When: ${booking.startTime}` : '',\n  `Attendee: ${booking.attendeeName} <${booking.email}>`,\n]\n  .filter(Boolean)\n  .join('\\n');\n\nreturn [\n  {\n    json: {\n      personId: person.id,\n      companyId: person.companyId ?? null,\n      createNoteBody: {\n        title: booking.title,\n        bodyV2: { markdown },\n      },\n    },\n  },\n];"
+      },
+      "id": "a4000004-0004-4000-8000-000000000004",
+      "name": "Build note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/notes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.createNoteBody) }}",
+        "options": {}
+      },
+      "id": "a4000004-0004-4000-8000-000000000005",
+      "name": "Create note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const built = $('Build note').first().json;\nconst created = $input.first().json;\nconst noteId = created.data?.id ?? created.id;\n\nif (!noteId) {\n  throw new Error('createNote did not return an id');\n}\n\nconst target = { noteId, personId: built.personId };\nif (built.companyId) {\n  target.companyId = built.companyId;\n}\n\nreturn [{ json: { noteId, target } }];"
+      },
+      "id": "a4000004-0004-4000-8000-000000000006",
+      "name": "Build note target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/noteTargets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.target) }}",
+        "options": {}
+      },
+      "id": "a4000004-0004-4000-8000-000000000007",
+      "name": "Link note to person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Normalize booking", "type": "main", "index": 0 }]]
+    },
+    "Normalize booking": {
+      "main": [[{ "node": "Find person by email", "type": "main", "index": 0 }]]
+    },
+    "Find person by email": {
+      "main": [[{ "node": "Build note", "type": "main", "index": 0 }]]
+    },
+    "Build note": {
+      "main": [[{ "node": "Create note", "type": "main", "index": 0 }]]
+    },
+    "Create note": {
+      "main": [[{ "node": "Build note target", "type": "main", "index": 0 }]]
+    },
+    "Build note target": {
+      "main": [[{ "node": "Link note to person", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

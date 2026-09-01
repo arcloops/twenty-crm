@@ -1,0 +1,199 @@
+{
+  "name": "twenty-training-certified → cert portal + note",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twenty-training-certified",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a6000006-0006-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "twenty-training-certified"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst record = body.record ?? body;\nconst status = String(record.status ?? '');\nconst isCertified = ['Certified', 'CERTIFIED'].includes(status);\n\nconst cohortId = record.cohortId ?? record.cohort_id ?? '';\nconst title = record.title ?? record.name ?? 'Training delivery';\nconst deliveryDate = record.deliveryDate ?? record.date ?? '';\nconst participantCount = record.participantCount ?? record.participants ?? null;\nconst clientName =\n  record.clientCompany?.name ??\n  record.company?.name ??\n  record.clientName ??\n  '';\n\nconst certBody = {\n  cohortId,\n  programmeTitle: title,\n  deliveryDate,\n  participantCount,\n  clientName,\n};\n\nreturn [\n  {\n    json: {\n      isCertified,\n      recordId: record.id ?? null,\n      cohortId,\n      title,\n      certBody,\n    },\n  },\n];"
+      },
+      "id": "a6000006-0006-4000-8000-000000000002",
+      "name": "Normalize delivery",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-certified",
+              "leftValue": "={{ $json.isCertified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a6000006-0006-4000-8000-000000000003",
+      "name": "IF Certified",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CERTIFICATE_PORTAL_API_URL }}/cohorts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.CERTIFICATE_PORTAL_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.certBody) }}",
+        "options": {}
+      },
+      "id": "a6000006-0006-4000-8000-000000000004",
+      "name": "Cert portal POST cohorts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, -80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Normalize delivery').first().json;\nconst markdown = [\n  `Certificate portal sync for ${normalized.title}.`,\n  normalized.cohortId ? `Cohort ID: ${normalized.cohortId}` : '',\n]\n  .filter(Boolean)\n  .join('\\n');\n\nreturn [\n  {\n    json: {\n      recordId: normalized.recordId,\n      createNoteBody: {\n        title: `Certified — ${normalized.cohortId || normalized.title}`,\n        bodyV2: { markdown },\n      },\n    },\n  },\n];"
+      },
+      "id": "a6000006-0006-4000-8000-000000000005",
+      "name": "Build cert note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/notes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.createNoteBody) }}",
+        "options": {}
+      },
+      "id": "a6000006-0006-4000-8000-000000000006",
+      "name": "Create note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, -80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const built = $('Build cert note').first().json;\nconst created = $input.first().json;\nconst noteId = created.data?.id ?? created.id;\n\nif (!noteId) {\n  throw new Error('createNote did not return an id');\n}\n\nreturn [\n  {\n    json: {\n      target: {\n        noteId,\n        trainingDeliveryId: built.recordId,\n      },\n    },\n  },\n];"
+      },
+      "id": "a6000006-0006-4000-8000-000000000007",
+      "name": "Build note target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1460, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/noteTargets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.target) }}",
+        "options": {}
+      },
+      "id": "a6000006-0006-4000-8000-000000000008",
+      "name": "Link note to training",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, -80]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Normalize delivery", "type": "main", "index": 0 }]]
+    },
+    "Normalize delivery": {
+      "main": [[{ "node": "IF Certified", "type": "main", "index": 0 }]]
+    },
+    "IF Certified": {
+      "main": [
+        [{ "node": "Cert portal POST cohorts", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Cert portal POST cohorts": {
+      "main": [[{ "node": "Build cert note", "type": "main", "index": 0 }]]
+    },
+    "Build cert note": {
+      "main": [[{ "node": "Create note", "type": "main", "index": 0 }]]
+    },
+    "Create note": {
+      "main": [[{ "node": "Build note target", "type": "main", "index": 0 }]]
+    },
+    "Build note target": {
+      "main": [[{ "node": "Link note to training", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

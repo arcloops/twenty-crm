@@ -1,0 +1,78 @@
+name: Arcloops Deploy
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  arcloops-deploy:
+    name: arcloops-deploy
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+
+      - name: Require RAILWAY_TOKEN
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ]; then
+            echo "::error::RAILWAY_TOKEN is not set. Add a Railway workspace or account token at Settings → Secrets and variables → Actions → New repository secret named RAILWAY_TOKEN. Do not commit the token."
+            exit 1
+          fi
+
+      - name: Map branch to Railway environment
+        id: railway-env
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            main)
+              echo "environment=production" >> "${GITHUB_OUTPUT}"
+              ;;
+            staging)
+              echo "environment=uat" >> "${GITHUB_OUTPUT}"
+              ;;
+            *)
+              echo "::error::Unexpected branch '${GITHUB_REF_NAME}'. This workflow only deploys staging→uat and main→production."
+              exit 1
+              ;;
+          esac
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@5.45.10
+
+      - name: Deploy twenty-server, twenty-worker, twenty-front
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT: ${{ steps.railway-env.outputs.environment }}
+        run: |
+          extra=()
+          if [ -n "${RAILWAY_PROJECT_ID}" ]; then
+            extra+=(--project "${RAILWAY_PROJECT_ID}")
+          else
+            echo "::warning::vars.RAILWAY_PROJECT_ID is empty. Workspace/account tokens need the Railway project ID as a repository variable. Environment-scoped project tokens may still work without it."
+          fi
+
+          for service in twenty-server twenty-worker twenty-front; do
+            echo "Deploying ${service} to ${RAILWAY_ENVIRONMENT}"
+            railway up \
+              --service "${service}" \
+              --environment "${RAILWAY_ENVIRONMENT}" \
+              --detach \
+              "${extra[@]}"
+          done

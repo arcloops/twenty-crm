@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" fill="none" role="img" aria-label="arcloops">
+  <g transform="translate(0, 2) scale(0.1)">
+    <path d="M 200 72 Q 278 160 314 268" fill="none" stroke="#0A66C2" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 314 268 Q 200 292 86 268" fill="none" stroke="#2DB012" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 86 268 Q 122 160 200 72" fill="none" stroke="#0A66C2" stroke-width="56" stroke-linecap="round"/>
+    <circle cx="200" cy="72" r="30" fill="#2DB012"/>
+    <circle cx="314" cy="268" r="30" fill="#0A66C2"/>
+    <circle cx="86" cy="268" r="30" fill="#0A66C2"/>
+  </g>
+  <text x="48" y="28" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.02em">
+    <tspan fill="#0A66C2">arc</tspan><tspan fill="#2DB012">loops</tspan>
+  </text>
+</svg>

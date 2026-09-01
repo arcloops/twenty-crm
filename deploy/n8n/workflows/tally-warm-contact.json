@@ -1,0 +1,120 @@
+{
+  "name": "tally → Twenty contact Warm Contact",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tally",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a5000005-0005-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "tally"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst fields = body.data?.fields ?? body.fields ?? [];\n\nconst valueFor = (...labels) => {\n  const match = fields.find((field) => {\n    const label = String(field.label ?? field.key ?? '').toLowerCase();\n    const type = String(field.type ?? '').toLowerCase();\n    return (\n      labels.some((wanted) => label.includes(wanted)) ||\n      (wantedHasEmail(labels) && type.includes('email'))\n    );\n  });\n  const raw = match?.value ?? match?.text ?? '';\n  return Array.isArray(raw) ? String(raw[0] ?? '') : String(raw);\n};\n\nfunction wantedHasEmail(labels) {\n  return labels.includes('email');\n}\n\nconst email = valueFor('email');\nconst fullName = valueFor('name', 'full name') || email.split('@')[0] || 'Tally lead';\nconst parts = fullName.trim().split(/\\s+/);\nconst firstName = parts[0] ?? '';\nconst lastName = parts.slice(1).join(' ');\nconst companyName = valueFor('company', 'organisation', 'organization');\n\nif (!email) {\n  throw new Error('Tally payload has no email field');\n}\n\nreturn [\n  {\n    json: {\n      email,\n      firstName,\n      lastName,\n      companyName,\n      createPersonBody: {\n        name: { firstName, lastName },\n        emails: { primaryEmail: email },\n      },\n    },\n  },\n];"
+      },
+      "id": "a5000005-0005-4000-8000-000000000002",
+      "name": "Map Tally fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/people",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.createPersonBody) }}",
+        "options": {}
+      },
+      "id": "a5000005-0005-4000-8000-000000000003",
+      "name": "Create person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mapped = $('Map Tally fields').first().json;\nconst created = $input.first().json;\nconst personId = created.data?.id ?? created.id;\n\nif (!personId) {\n  throw new Error('createPerson did not return an id');\n}\n\nconst dealName = mapped.companyName\n  ? `${mapped.companyName} — inbound`\n  : `${mapped.firstName} ${mapped.lastName} — inbound`.trim();\n\nreturn [\n  {\n    json: {\n      personId,\n      createOpportunityBody: {\n        name: dealName,\n        stage: $env.TWENTY_INBOUND_STAGE || 'WARM_CONTACT',\n        pointOfContactId: personId,\n      },\n    },\n  },\n];"
+      },
+      "id": "a5000005-0005-4000-8000-000000000004",
+      "name": "Build Warm Contact deal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TWENTY_CRM_API_URL }}/rest/opportunities",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.TWENTY_CRM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.createOpportunityBody) }}",
+        "options": {}
+      },
+      "id": "a5000005-0005-4000-8000-000000000005",
+      "name": "Create Warm Contact opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Map Tally fields", "type": "main", "index": 0 }]]
+    },
+    "Map Tally fields": {
+      "main": [[{ "node": "Create person", "type": "main", "index": 0 }]]
+    },
+    "Create person": {
+      "main": [[{ "node": "Build Warm Contact deal", "type": "main", "index": 0 }]]
+    },
+    "Build Warm Contact deal": {
+      "main": [
+        [{ "node": "Create Warm Contact opportunity", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -1,0 +1,20 @@
+/* Arcloops brand tokens — source of truth. Not imported into twenty-front.
+   ThemeLight.ts does not exist in twenty-front; twenty-ui theme is left
+   untouched so we do not recolor the whole CRM chrome. */
+:root {
+  /* Authority Blue */
+  --arcloops-authority-blue: #0a66c2;
+  --arcloops-authority-blue-hover: #0856a3;
+  --arcloops-authority-blue-tint: #ebf4fb;
+
+  /* Growth Green */
+  --arcloops-growth-green: #2db012;
+  --arcloops-growth-green-hover: #258e0e;
+  --arcloops-growth-green-tint: #eef9eb;
+
+  /* Navy / structure */
+  --arcloops-navy: #0d1117;
+  --arcloops-indigo: #0a2e52;
+  --arcloops-near-black: #0d0d0d;
+  --arcloops-site-gray: #f8faff;
+}

@@ -1,0 +1,55 @@
+name: Arcloops CI
+
+on:
+  pull_request:
+    branches:
+      - staging
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arcloops-ci:
+    name: arcloops-ci
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: '--max-old-space-size=6144'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      # lint:diff-with-main diffs `main...HEAD` from each package cwd.
+      - name: Fetch main for lint:diff-with-main
+        run: git fetch --no-tags origin +refs/heads/main:refs/heads/main
+
+      - name: Install dependencies
+        uses: ./.github/actions/yarn-install
+
+      - name: Write package .env from examples
+        run: |
+          npx nx reset:env twenty-server
+          npx nx reset:env twenty-front
+
+      # twenty-shared/dist is required before typecheck (and type-aware lint).
+      - name: Build twenty-shared
+        run: npx nx build twenty-shared
+
+      - name: Lint twenty-server (changed vs main)
+        run: npx nx lint:diff-with-main twenty-server
+
+      - name: Lint twenty-front (changed vs main)
+        run: npx nx lint:diff-with-main twenty-front
+
+      - name: Typecheck twenty-server
+        run: npx nx typecheck twenty-server
+
+      - name: Typecheck twenty-front
+        run: npx nx typecheck twenty-front

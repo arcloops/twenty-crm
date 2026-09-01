@@ -1,0 +1,107 @@
+{
+  "name": "twenty-deal-updated → Teams (Proposal Sent)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "twenty-deal-updated",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a2000002-0002-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "twenty-deal-updated"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst record = body.record ?? body;\nconst stage = String(record.stage ?? '');\nconst proposalStages = ['Proposal Sent', 'PROPOSAL', 'PROPOSAL_SENT'];\nconst isProposalSent = proposalStages.includes(stage);\n\nconst name = record.name ?? 'Untitled deal';\nconst companyName =\n  record.company?.name ?? record.companyName ?? record.companyId ?? '';\nconst amountObject = record.amount ?? {};\nconst amount =\n  typeof amountObject.amountMicros === 'number'\n    ? `${(amountObject.amountMicros / 1000000).toFixed(2)} ${amountObject.currencyCode ?? ''}`.trim()\n    : String(record.amount ?? '');\n\nconst teamsPayload = {\n  type: 'message',\n  attachments: [\n    {\n      contentType: 'application/vnd.microsoft.card.adaptive',\n      content: {\n        $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',\n        type: 'AdaptiveCard',\n        version: '1.4',\n        body: [\n          {\n            type: 'TextBlock',\n            text: '🎯 Proposal Sent',\n            weight: 'Bolder',\n            size: 'Medium',\n            color: 'Accent',\n          },\n          {\n            type: 'FactSet',\n            facts: [\n              { title: 'Deal', value: String(name) },\n              { title: 'Company', value: String(companyName) },\n              { title: 'Value', value: String(amount) },\n            ],\n          },\n        ],\n      },\n    },\n  ],\n};\n\nreturn [\n  {\n    json: {\n      name,\n      companyName,\n      amount,\n      stage,\n      isProposalSent,\n      opportunityId: record.id ?? null,\n      teamsPayload,\n    },\n  },\n];"
+      },
+      "id": "a2000002-0002-4000-8000-000000000002",
+      "name": "Normalize opportunity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-proposal-sent",
+              "leftValue": "={{ $json.isProposalSent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2000002-0002-4000-8000-000000000003",
+      "name": "IF Proposal Sent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_BD_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.teamsPayload) }}",
+        "options": {}
+      },
+      "id": "a2000002-0002-4000-8000-000000000004",
+      "name": "Teams Adaptive Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Normalize opportunity", "type": "main", "index": 0 }]]
+    },
+    "Normalize opportunity": {
+      "main": [[{ "node": "IF Proposal Sent", "type": "main", "index": 0 }]]
+    },
+    "IF Proposal Sent": {
+      "main": [
+        [{ "node": "Teams Adaptive Card", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "arcloops" }, { "name": "phase-7" }],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

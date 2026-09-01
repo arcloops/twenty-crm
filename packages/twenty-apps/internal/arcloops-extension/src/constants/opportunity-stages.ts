@@ -1,0 +1,38 @@
+// Opportunity.stage values. Settings (not this app) own the labels.
+// Default Twenty: NEW / SCREENING / MEETING / PROPOSAL / CUSTOMER
+// Arcloops target: Warm Contact → Meeting Booked → Discovery →
+// Proposal Sent → Negotiation → Won / Lost
+
+export const ARCLOOPS_OPPORTUNITY_STAGE = {
+  WARM_CONTACT: 'WARM_CONTACT',
+  MEETING_BOOKED: 'MEETING_BOOKED',
+  DISCOVERY: 'DISCOVERY',
+  PROPOSAL_SENT: 'PROPOSAL_SENT',
+  NEGOTIATION: 'NEGOTIATION',
+  WON: 'WON',
+  LOST: 'LOST',
+} as const;
+
+export const TWENTY_DEFAULT_OPPORTUNITY_STAGE = {
+  NEW: 'NEW',
+  SCREENING: 'SCREENING',
+  MEETING: 'MEETING',
+  PROPOSAL: 'PROPOSAL',
+  CUSTOMER: 'CUSTOMER',
+} as const;
+
+export const PROPOSAL_SENT_STAGE_VALUES = [
+  ARCLOOPS_OPPORTUNITY_STAGE.PROPOSAL_SENT,
+  'Proposal Sent',
+  TWENTY_DEFAULT_OPPORTUNITY_STAGE.PROPOSAL,
+  'PROPOSAL',
+] as const;
+
+export const CLOSED_OPPORTUNITY_STAGE_VALUES = new Set([
+  ARCLOOPS_OPPORTUNITY_STAGE.WON,
+  ARCLOOPS_OPPORTUNITY_STAGE.LOST,
+  'Won',
+  'Lost',
+  TWENTY_DEFAULT_OPPORTUNITY_STAGE.CUSTOMER,
+  'Customer',
+]);
