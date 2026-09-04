@@ -58,7 +58,7 @@ import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public
 import { RedisClientModule } from 'src/engine/core-modules/redis-client/redis-client.module';
 import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
 import { SearchModule } from 'src/engine/core-modules/search/search.module';
-import { WorkspaceSSOModule } from 'src/engine/core-modules/sso/sso.module';
+import { WorkspaceSsoModule } from 'src/engine/core-modules/sso/sso.module';
 import { WellKnownModule } from 'src/engine/core-modules/well-known/well-known.module';
 import { TelemetryModule } from 'src/engine/core-modules/telemetry/telemetry.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
@@ -79,6 +79,7 @@ import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.modul
 import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
 import { ChannelSyncModule } from 'src/modules/connected-account/channel-sync/channel-sync.module';
 import { CreateCalendarEventModule } from 'src/modules/calendar/calendar-event-creation-manager/create-calendar-event.module';
+import { CallRecordingModule } from 'src/modules/call-recording/call-recording.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { SendEmailModule } from 'src/modules/messaging/message-outbound-manager/send-email.module';
 import { ClientConfigModule } from './client-config/client-config.module';
@@ -116,7 +117,7 @@ import { FileModule } from './file/file.module';
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,
-    WorkspaceSSOModule,
+    WorkspaceSsoModule,
     ApprovedAccessDomainModule,
     EmailingDomainModule,
     EmailingModule,
@@ -138,6 +139,7 @@ import { FileModule } from './file/file.module';
     ChannelSyncModule,
     SendEmailModule,
     CreateCalendarEventModule,
+    CallRecordingModule,
     FileStorageModule.forRoot(),
     LoggerModule.forRootAsync({
       useFactory: loggerModuleFactory,
@@ -193,7 +195,7 @@ import { FileModule } from './file/file.module';
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,
-    WorkspaceSSOModule,
+    WorkspaceSsoModule,
     ImapSmtpCaldavModule,
   ],
 })
