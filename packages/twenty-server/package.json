@@ -165,6 +165,7 @@
     "stripe": "20.4.1",
     "tar": "^7.5.9",
     "temporal-polyfill": "^0.3.0",
+    "tesseract.js": "portal:./vendor/tesseract.js",
     "tsconfig-paths": "^4.2.0",
     "tsdav": "^2.2.0",
     "tslib": "2.8.1",

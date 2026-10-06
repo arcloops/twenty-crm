@@ -9,4 +9,5 @@ export type SocialSsoState = {
   action?: SocialSsoSignInUpActionType;
   locale?: keyof typeof APP_LOCALES;
   returnToPath?: string;
+  mobileRedirectUri?: string;
 };

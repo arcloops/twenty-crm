@@ -1,0 +1,21 @@
+# Requires password auth enabled on the workspace (/client-config authProviders.password).
+# Env: MAESTRO_EMAIL, MAESTRO_PASSWORD
+appId: io.arcloops.crm
+---
+- launchApp
+- assertVisible: "Arcloops CRM"
+- extendedWaitUntil:
+    visible:
+      id: "login-email"
+    timeout: 30000
+- tapOn:
+    id: "login-email"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn:
+    id: "login-password"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn:
+    id: "login-submit"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 45000

@@ -29,6 +29,18 @@ export const buildPersonStandardFlatIndexMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  ownerIdIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'ownerIdIndex',
+      relatedFieldNames: ['owner'],
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
   emailsUniqueIndex: createStandardIndexFlatMetadata({
     objectName,
     workspaceId,

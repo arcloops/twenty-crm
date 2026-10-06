@@ -111,6 +111,10 @@ jest.mock('@/command-menu-item/components/RecordShowCommandMenu', () => ({
   RecordShowCommandMenu: () => <div data-testid="main-command-menu" />,
 }));
 
+jest.mock('@/business-card/components/ScanBusinessCardButton', () => ({
+  ScanBusinessCardButton: () => <div data-testid="scan-business-card" />,
+}));
+
 jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
   SidePanelToggleButton: () => <div data-testid="side-panel-toggle" />,
 }));

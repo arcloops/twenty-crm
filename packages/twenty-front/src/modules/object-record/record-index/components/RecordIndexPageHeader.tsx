@@ -1,3 +1,4 @@
+import { ScanBusinessCardButton } from '@/business-card/components/ScanBusinessCardButton';
 import { RecordIndexCommandMenu } from '@/command-menu-item/components/RecordIndexCommandMenu';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { contextStoreNumberOfSelectedRecordsComponentState } from '@/context-store/states/contextStoreNumberOfSelectedRecordsComponentState';
@@ -31,6 +32,12 @@ const StyledTitle = styled.div`
 const StyledSelectedRecordsCount = styled.div`
   color: ${themeCssVariables.font.color.tertiary};
   padding-left: ${themeCssVariables.spacing['0.5']};
+`;
+
+const StyledActions = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
 `;
 
 export const RecordIndexPageHeader = () => {
@@ -72,6 +79,8 @@ export const RecordIndexPageHeader = () => {
     isLayoutCustomizationModeEnabledState,
   );
 
+  const showScanBusinessCard = objectNamePlural === 'people';
+
   return (
     <>
       <SidePanelPageTitleSyncEffect pageTitle={label} />
@@ -82,11 +91,12 @@ export const RecordIndexPageHeader = () => {
         title={pageHeaderTitle}
         actionButton={
           isDefined(contextStoreCurrentViewId) ? (
-            <>
+            <StyledActions>
+              {showScanBusinessCard ? <ScanBusinessCardButton /> : null}
               <RecordIndexCommandMenu />
               {!isLayoutCustomizationModeEnabled &&
                 workspaceSurface.type === 'main' && <SidePanelToggleButton />}
-            </>
+            </StyledActions>
           ) : undefined
         }
       />

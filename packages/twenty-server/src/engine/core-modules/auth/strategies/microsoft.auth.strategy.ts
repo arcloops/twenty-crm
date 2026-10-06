@@ -31,6 +31,7 @@ export type MicrosoftRequest = Omit<
     billingCheckoutSessionState?: string;
     action: SocialSsoSignInUpActionType;
     returnToPath?: string;
+    mobileRedirectUri?: string;
   };
 };
 
@@ -58,6 +59,7 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
         billingCheckoutSessionState: req.query.billingCheckoutSessionState,
         action: req.query.action,
         returnToPath: req.query.returnToPath,
+        mobileRedirectUri: req.query.mobileRedirectUri,
         oauthRetryCount: req.query.oauthRetryCount
           ? Number(req.query.oauthRetryCount)
           : undefined,
@@ -95,6 +97,7 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
       locale: state?.locale,
       action: state?.action ?? 'list-available-workspaces',
       returnToPath: state?.returnToPath,
+      mobileRedirectUri: state?.mobileRedirectUri,
     };
 
     done(null, user);

@@ -64,6 +64,40 @@ describe('SignInUpSsoExchangeTokenEffect', () => {
     expect(redeemSsoExchangeTokenMock).toHaveBeenCalledTimes(1);
   });
 
+  it('deep-links to the native app instead of redeeming on web', async () => {
+    const replaceSpy = jest.fn();
+    const originalLocation = window.location;
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        replace: replaceSpy,
+      },
+    });
+
+    const returnToPath = `/--native-oauth/${encodeURIComponent('exp://127.0.0.1:8081/--/oauth')}`;
+    const url = new URL('https://crm.arcloops.io/welcome');
+    url.searchParams.set('returnToPath', returnToPath);
+    url.hash = 'ssoExchangeToken=sso-exchange-token';
+
+    renderEffect(`${url.pathname}${url.search}${url.hash}`);
+
+    await waitFor(() => {
+      expect(replaceSpy).toHaveBeenCalled();
+    });
+
+    const deepLink = String(replaceSpy.mock.calls[0]?.[0]);
+    expect(deepLink).toContain('exp://127.0.0.1:8081/--/oauth');
+    expect(deepLink).toContain('ssoExchangeToken=sso-exchange-token');
+    expect(redeemSsoExchangeTokenMock).not.toHaveBeenCalled();
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
   it('does nothing when the url carries no token', () => {
     renderEffect('/sign-in-up');
 

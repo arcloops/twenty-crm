@@ -1,8 +1,12 @@
 import { useParams } from 'react-router-dom';
-import { FeatureFlagKey } from 'twenty-shared/types';
+import {
+  CoreObjectNameSingular,
+  FeatureFlagKey,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { WorkspaceRouteUnavailable } from '@/app/routing/components/WorkspaceRouteUnavailable';
+import { ScanBusinessCardButton } from '@/business-card/components/ScanBusinessCardButton';
 import { isWorkspaceWorkflowVersionRouteHidden } from '@/object-core/workflows/utils/isWorkspaceWorkflowVersionRouteHidden';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
@@ -24,7 +28,6 @@ import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { RecordShowPageHeader } from '~/pages/object-record/RecordShowPageHeader';
 import { RecordShowPageTitle } from '~/pages/object-record/RecordShowPageTitle';
-
 type RecordShowPageParameters = {
   objectNameSingular?: string;
   objectRecordId?: string;
@@ -111,6 +114,11 @@ const RecordShowPageContent = ({
             >
               {!isInSidePanel && (
                 <>
+                  {objectNameSingular === CoreObjectNameSingular.Person ? (
+                    <ScanBusinessCardButton
+                      existingPersonId={objectRecordId}
+                    />
+                  ) : null}
                   <RecordShowCommandMenu />
                   {!isLayoutCustomizationModeEnabled && (
                     <SidePanelToggleButton />

@@ -1,10 +1,14 @@
 # Twenty Mobile (Expo)
 
-Starter notes for building a React Native / Expo client against our self-hosted Twenty CRM.
+Full Expo (managed) client against our self-hosted Twenty CRM — password + Microsoft/Google AuthSession, CRM core, views, activities, business-card People scan, Settings (profile / experience / accounts / members / API keys / roles / billing), dashboards, workflows, and EAS store-ready config.
 
 **Live API / app:** [https://crm.arcloops.io](https://crm.arcloops.io)
 
-There is no first-party mobile app in upstream Twenty. This package is where our Expo app lives. It talks to the **same** `twenty-server` APIs as `twenty-front` — it does **not** need a separate backend.
+**Architecture & phases:** see [ARCHITECTURE.md](./ARCHITECTURE.md) (Phases 0–8 done MVP).
+
+```bash
+yarn workspace twenty-mobile start
+```
 
 ## Architecture (keep this mental model)
 
@@ -27,10 +31,12 @@ https://crm.arcloops.io  (twenty-server behind reverse proxy)
 
 ## Base URLs
 
-| Environment | Base URL |
-|-------------|----------|
-| Production | `https://crm.arcloops.io` |
-| Local server | `http://localhost:3000` (use machine LAN IP from a physical device) |
+| Environment | Front (origin) | API |
+|-------------|----------------|-----|
+| Production | `https://crm.arcloops.io` | `https://crm-api.arcloops.io` |
+| Local server | `http://localhost:3001` | `http://localhost:3000` (use machine LAN IP from a physical device) |
+
+Mobile must call the **API host** for `/auth`, `/metadata`, and `/graphql`. Pointing `EXPO_PUBLIC_TWENTY_API_URL` at the front SPA host makes Microsoft/Google login open the website 404 page.
 
 Paths (append to base):
 
@@ -112,12 +118,98 @@ Fine for smoke tests. Prefer **user login tokens** for a real multi-user mobile 
 
 ## Suggested first milestone
 
-1. Scaffold Expo in this package (`npx create-expo-app` / Expo Router).
+1. Scaffold **full Expo** in this package (`npx create-expo-app` / Expo Router, managed workflow).
 2. Env: `EXPO_PUBLIC_TWENTY_API_URL=https://crm.arcloops.io`
-3. Login screen → SecureStore tokens → token refresh helper.
+3. Login screen → `expo-secure-store` tokens → token refresh helper.
 4. One Core query (e.g. companies list) on `/graphql`.
 5. Then product UI (tabs, record detail, etc.).
+6. Ship with **EAS Build / Submit** (Phase 8 — see below).
 
+## Phase 8 — Admin + store release
+
+### Admin settings (read-only)
+
+Settings hub includes permission-gated rows:
+
+| Screen | Gate | Manage on web |
+|--------|------|----------------|
+| API keys | `API_KEYS_AND_WEBHOOKS` | `/settings/mcp-apis` |
+| Roles | `ROLES` | `/settings/members/roles` |
+| Billing | `WORKSPACE` + billing enabled | `/settings/billing` |
+
+Create / revoke keys and edit roles stay on web.
+
+### EAS Build / Submit
+
+```bash
+cd packages/twenty-mobile
+
+# One-time: link Expo project (fills EXPO_PUBLIC_EAS_PROJECT_ID)
+eas init
+
+# Internal / TestFlight-style preview
+eas build --profile preview --platform ios
+eas build --profile preview --platform android
+
+# Store binaries
+eas build --profile production --platform all
+
+# Submit needs your Apple Developer / Play Console credentials (out of band)
+eas submit --profile production --platform ios
+eas submit --profile production --platform android
+```
+
+Profiles live in `eas.json` (`development` = Dev Client, `preview` = internal, `production` = store). Do **not** commit Apple/Google secrets.
+
+### Env vars (store)
+
+| Variable | Purpose |
+|----------|---------|
+| `EXPO_PUBLIC_TWENTY_API_URL` | API base (default `https://crm.arcloops.io`) |
+| `EXPO_PUBLIC_TWENTY_ORIGIN` | Auth `origin` + web deep links |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | Expo EAS project id after `eas init` |
+| `EXPO_PUBLIC_PRIVACY_POLICY_URL` | Privacy URL in app config (default Twenty legal) |
+| `EXPO_PUBLIC_SENTRY_DSN` | Optional; enables Sentry init + Expo plugin |
+
+### Optional Sentry
+
+```bash
+yarn workspace twenty-mobile add @sentry/react-native
+# set EXPO_PUBLIC_SENTRY_DSN=… then rebuild
+```
+
+Without DSN (or without the package), init is a no-op.
+
+### Maestro smoke
+
+Password auth must be enabled (`/client-config` → `authProviders.password`). Record smoke needs at least one workspace object on Home.
+
+```bash
+# Install Maestro CLI: https://maestro.mobile.dev
+export MAESTRO_EMAIL='you@workspace.com'
+export MAESTRO_PASSWORD='…'
+maestro test packages/twenty-mobile/.maestro/login.yaml
+maestro test packages/twenty-mobile/.maestro/record-smoke.yaml
+```
+
+Run against a simulator/emulator with a preview or local Dev Client build.
+
+### Web-only for store
+
+Still web-first: data-model editor, workflow builder, dense TABLE, admin impersonation, spreadsheet import, chart builder, push until device-token API.
+
+## Run locally (Phase 0 + 1)
+
+```bash
+# from repo root (after yarn install)
+yarn workspace twenty-mobile start
+# or
+cd packages/twenty-mobile && yarn start
+```
+
+Then open iOS Simulator, Android emulator, or Expo Go / Dev Client. Sign in with a workspace email/password against `EXPO_PUBLIC_TWENTY_API_URL`.
+
+Env file: `packages/twenty-mobile/.env` (gitignored).
 ### Sanity checks before coding screens
 
 ```bash

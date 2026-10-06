@@ -424,6 +424,37 @@ export const buildPersonStandardFlatFieldMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  owner: createStandardRelationFieldFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      type: FieldMetadataType.RELATION,
+      morphId: null,
+      fieldName: 'owner',
+      label: i18nLabel(
+        msg({ message: `Owner`, context: 'fieldMetadata.label' }),
+      ),
+      description: i18nLabel(
+        msg({
+          message: `Workspace member who owns and manages this person/lead`,
+          context: 'fieldMetadata.description',
+        }),
+      ),
+      icon: 'IconUserCircle',
+      isNullable: true,
+      targetObjectName: 'workspaceMember',
+      targetFieldName: 'ownedPeople',
+      settings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: RelationOnDeleteAction.SET_NULL,
+        joinColumnName: 'ownerId',
+      },
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
   pointOfContactForOpportunities: createStandardRelationFieldFlatMetadata({
     objectName,
     workspaceId,

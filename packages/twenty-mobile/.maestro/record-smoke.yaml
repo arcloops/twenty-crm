@@ -1,0 +1,9 @@
+# Smoke: login → People tab → back to Home.
+appId: host.exp.Exponent
+---
+- launchApp
+- assertVisible: "Home"
+- tapOn: "People"
+- assertVisible: "People"
+- tapOn: "Home"
+- assertVisible: "Home"

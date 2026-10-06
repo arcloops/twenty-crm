@@ -49,6 +49,11 @@ import { SsoExchangeTokenService } from 'src/engine/core-modules/auth/token/serv
 import { AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import {
+  buildMobileAuthRedirectUrl,
+  isAllowedMobileAuthRedirectUri,
+} from 'src/engine/core-modules/auth/utils/build-mobile-auth-redirect-url.util';
+import { parseNativeOAuthRedirectFromReturnToPath } from 'src/engine/core-modules/auth/utils/parse-native-oauth-redirect-from-return-to-path.util';
+import {
   type AuthProviderWithPasswordType,
   type ExistingUserOrNewUser,
   type SignInUpBaseParams,
@@ -982,10 +987,16 @@ export class AuthService {
       billingCheckoutSessionState,
       locale,
       returnToPath,
+      mobileRedirectUri,
     }: MicrosoftRequest['user'] | GoogleRequest['user'],
     authProvider: AuthProviderEnum.Google | AuthProviderEnum.Microsoft,
   ): Promise<string> {
     const email = rawEmail.toLowerCase();
+    const allowedMobileRedirectUri =
+      isNonEmptyString(mobileRedirectUri) &&
+      isAllowedMobileAuthRedirectUri(mobileRedirectUri)
+        ? mobileRedirectUri
+        : undefined;
 
     const existingUser =
       await this.userService.findUserByEmailWithWorkspaces(email);
@@ -1014,6 +1025,19 @@ export class AuthService {
           userId: user.id,
           authProvider,
         });
+
+      const nativeRedirectFromReturnToPath =
+        parseNativeOAuthRedirectFromReturnToPath(returnToPath);
+
+      const mobileRedirectTarget =
+        allowedMobileRedirectUri ?? nativeRedirectFromReturnToPath ?? undefined;
+
+      if (isDefined(mobileRedirectTarget)) {
+        return buildMobileAuthRedirectUrl({
+          mobileRedirectUri: mobileRedirectTarget,
+          ssoExchangeToken: ssoExchangeToken.token,
+        });
+      }
 
       // The token rides in the fragment so it never reaches access logs,
       // proxies or Referer headers: browsers keep it out of the request line.
@@ -1087,6 +1111,19 @@ export class AuthService {
         workspace.id,
         authProvider,
       );
+
+      const nativeRedirectFromReturnToPath =
+        parseNativeOAuthRedirectFromReturnToPath(returnToPath);
+
+      const mobileRedirectTarget =
+        allowedMobileRedirectUri ?? nativeRedirectFromReturnToPath ?? undefined;
+
+      if (isDefined(mobileRedirectTarget)) {
+        return buildMobileAuthRedirectUrl({
+          mobileRedirectUri: mobileRedirectTarget,
+          loginToken: loginToken.token,
+        });
+      }
 
       return this.computeRedirectURI({
         loginToken: loginToken.token,

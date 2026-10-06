@@ -881,6 +881,36 @@ export const buildWorkspaceMemberStandardFlatFieldMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  ownedPeople: createStandardRelationFieldFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      type: FieldMetadataType.RELATION,
+      morphId: null,
+      fieldName: 'ownedPeople',
+      label: i18nLabel(
+        msg({ message: `Owned people`, context: 'fieldMetadata.label' }),
+      ),
+      description: i18nLabel(
+        msg({
+          message: `People/leads owned by the workspace member`,
+          context: 'fieldMetadata.description',
+        }),
+      ),
+      icon: 'IconUser',
+      isNullable: false,
+      isUIEditable: false,
+      targetObjectName: 'person',
+      targetFieldName: 'owner',
+      settings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
   createdBy: createStandardFieldFlatMetadata({
     objectName,
     workspaceId,

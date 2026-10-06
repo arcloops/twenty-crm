@@ -936,6 +936,7 @@ export const STANDARD_OBJECT_FIELDS = {
       universalIdentifier: '20202020-a7c9-4e3d-8f1b-2d5a6b7c8e9f',
     },
     company: { universalIdentifier: '20202020-e2f3-448e-b34c-2d625f0025fd' },
+    owner: { universalIdentifier: '20202020-c8d4-4f1a-9b2e-7a6d5c4b3e2f' },
     pointOfContactForOpportunities: {
       universalIdentifier: '20202020-911b-4a7d-b67b-918aa9a5b33a',
     },
@@ -1226,6 +1227,9 @@ export const STANDARD_OBJECT_FIELDS = {
     },
     ownedOpportunities: {
       universalIdentifier: '20202020-9e4d-4b3a-8c1f-6d7e8f9a0b1c',
+    },
+    ownedPeople: {
+      universalIdentifier: '20202020-a5b6-4c7d-8e9f-0a1b2c3d4e5f',
     },
     accountOwnerForCompanies: {
       universalIdentifier: '20202020-dc29-4bd4-a3c1-29eafa324bee',
