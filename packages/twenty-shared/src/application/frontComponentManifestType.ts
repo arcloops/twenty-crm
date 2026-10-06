@@ -7,10 +7,11 @@ export type CommandMenuItemManifest = SyncableEntityOptions & {
   /** @deprecated icon will be ignored in favor of application icon */
   icon?: string;
   isPinned?: boolean;
-  availabilityType?: `${CommandMenuItemAvailabilityType}`;
+  availabilityType?: CommandMenuItemAvailabilityType;
   availabilityObjectUniversalIdentifier?: string;
   frontComponentUniversalIdentifier: string;
   conditionalAvailabilityExpression?: string;
+  conditionalPinnedExpression?: string;
 };
 
 export type FrontComponentManifest = {

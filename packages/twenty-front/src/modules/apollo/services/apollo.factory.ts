@@ -12,6 +12,7 @@ import UploadHttpLink from 'apollo-upload-client/UploadHttpLink.mjs';
 
 import { type CurrentWorkspaceMember } from '@/auth/states/currentWorkspaceMemberState';
 import { type CurrentWorkspace } from '@/auth/states/currentWorkspaceState';
+import { getSessionGeneration } from '@/auth/utils/getSessionGeneration';
 import { logDebug } from '~/utils/logDebug';
 
 import { REST_API_BASE_URL } from '@/apollo/constant/rest-api-base-url';
@@ -99,6 +100,7 @@ export class ApolloFactory implements ApolloManager {
         const locale = this.currentWorkspaceMember?.locale ?? i18n.locale;
 
         return {
+          sessionGeneration: getSessionGeneration(),
           headers: {
             ...headers,
             ...optionHeaders,
@@ -119,9 +121,7 @@ export class ApolloFactory implements ApolloManager {
           retryIf: (error, operation) => {
             // oxlint-disable-next-line no-console
             console.log('retryIf error from retryLink', error);
-            // A retry is a fresh request seconds later, so it carries whatever
-            // cookie exists by then rather than the one that was current when
-            // the operation was issued. See PendingServerSignOutEffect.
+            // A retry carries whatever cookie exists by then. See PendingServerSignOutEffect.
             if (operation.getContext().skipRetry === true) {
               return false;
             }
@@ -195,11 +195,20 @@ export class ApolloFactory implements ApolloManager {
       };
 
       const errorLink = new ErrorLink(({ error, operation }) => {
+        const requestSessionGeneration =
+          operation.getContext().sessionGeneration;
+        // Missing context must keep sign-out behavior if the link chain changes.
+        const isResponseFromCurrentSession =
+          requestSessionGeneration === undefined ||
+          requestSessionGeneration === getSessionGeneration();
+
         if (CombinedGraphQLErrors.is(error)) {
           onErrorCb?.(error.errors);
           for (const graphQLError of error.errors) {
             if (isUnauthenticatedGraphQLError(graphQLError)) {
-              onUnauthenticatedError?.();
+              if (isResponseFromCurrentSession) {
+                onUnauthenticatedError?.();
+              }
 
               return;
             }
@@ -240,7 +249,9 @@ export class ApolloFactory implements ApolloManager {
             this.isRestOperation(operation) &&
             this.isAuthenticationError(error)
           ) {
-            onUnauthenticatedError?.();
+            if (isResponseFromCurrentSession) {
+              onUnauthenticatedError?.();
+            }
 
             return;
           }
@@ -262,8 +273,7 @@ export class ApolloFactory implements ApolloManager {
         }
       });
 
-      // Type assertion needed because third-party link packages (apollo-link-rest,
-      // apollo-upload-client) reference their own @apollo/client ApolloLink type
+      // Cast because third-party links (apollo-link-rest, apollo-upload-client) reference their own ApolloLink type.
       const links = [
         errorLink,
         authLink,

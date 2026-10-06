@@ -1,4 +1,3 @@
-import { useGetIsMetadataItemFromStandardApplication } from '@/object-metadata/hooks/useGetIsMetadataItemFromStandardApplication';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { formatFieldMetadataItemAsColumnDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsColumnDefinition';
@@ -11,7 +10,6 @@ import { RecordFieldComponentInstanceContext } from '@/object-record/record-fiel
 import { isJunctionRelationForbidden } from '@/object-record/record-field/ui/utils/junction/isJunctionRelationForbidden';
 import { RecordInlineCell } from '@/object-record/record-inline-cell/components/RecordInlineCell';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
-import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { type ObjectPermissions } from 'twenty-shared/types';
 
 type FieldsWidgetFieldItemProps = {
@@ -44,9 +42,6 @@ export const FieldsWidgetFieldItem = ({
   instanceId,
   onMouseEnter,
 }: FieldsWidgetFieldItemProps) => {
-  const getIsMetadataItemFromStandardApplication =
-    useGetIsMetadataItemFromStandardApplication();
-
   const fieldDefinition = formatFieldMetadataItemAsColumnDefinition({
     field: fieldMetadataItem,
     position: globalIndex,
@@ -67,13 +62,7 @@ export const FieldsWidgetFieldItem = ({
         isDisplayModeFixHeight: true,
         isRecordFieldReadOnly: isRecordFieldReadOnly({
           isRecordReadOnly,
-          isSystemObject: objectMetadataItem.isSystem,
-          objectPermissions: getObjectPermissionsFromMapByObjectMetadataId({
-            objectPermissionsByObjectMetadataId,
-            objectMetadataId: objectMetadataItem.id,
-          }),
-          isFieldFromStandardApplication:
-            getIsMetadataItemFromStandardApplication(fieldMetadataItem),
+          objectMetadataId: objectMetadataItem.id,
           fieldMetadataItem,
           fieldDefinition,
           objectPermissionsByObjectMetadataId,

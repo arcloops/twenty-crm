@@ -1,3 +1,4 @@
+import { buildCoreDispatchIds } from 'src/engine/core-modules/workflow/utils/build-core-dispatch-ids.util';
 import { Injectable, Logger } from '@nestjs/common';
 
 import {
@@ -24,6 +25,8 @@ import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-m
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { RecordAccessPolicyService } from 'src/engine/core-modules/record-share/services/record-access-policy.service';
+import { omitInheritedReadabilityChildRecords } from 'src/engine/core-modules/record-share/utils/omit-inherited-readability-child-records.util';
 import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { isCachedDatabaseEventTrigger } from 'src/engine/core-modules/workflow/utils/cached-workflow-automated-trigger.util';
@@ -36,6 +39,7 @@ import {
   type BaseDatabaseEventTriggerSettings,
   type UpdateEventTriggerSettings,
 } from 'src/modules/workflow/workflow-trigger/automated-trigger/constants/automated-trigger-settings';
+import { resolveAutomationAdmittedRecordIds } from 'src/modules/workflow/workflow-trigger/automated-trigger/utils/resolve-automation-admitted-record-ids.util';
 import { type CoreDispatchIds } from 'src/engine/core-modules/workflow/types/workflow-automated-trigger-maps.type';
 import {
   WorkflowTriggerJob,
@@ -44,6 +48,7 @@ import {
 
 type DatabaseEventTriggerListener = {
   workflowId: string;
+  legacyWorkflowId?: string;
   settings: AutomatedTriggerSettings;
 } & CoreDispatchIds;
 
@@ -65,6 +70,7 @@ export class WorkflowDatabaseEventTriggerListener {
     private readonly messageQueueService: MessageQueueService,
     private readonly workflowCommonWorkspaceService: WorkflowCommonWorkspaceService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly recordAccessPolicyService: RecordAccessPolicyService,
   ) {}
 
   @OnDatabaseBatchEvent('*', DatabaseEventAction.CREATED)
@@ -353,12 +359,19 @@ export class WorkflowDatabaseEventTriggerListener {
       databaseEventName,
     );
 
+    if (eventListeners.length === 0) {
+      return;
+    }
+
+    const admittedRecordIds = await this.resolveAdmittedRecordIds(payload);
+
     for (const eventListener of eventListeners) {
       for (const eventPayload of payload.events) {
         const shouldTriggerJob = this.shouldTriggerJob({
           eventPayload,
           eventListener,
           action,
+          admittedRecordIds,
         });
 
         if (shouldTriggerJob) {
@@ -366,11 +379,10 @@ export class WorkflowDatabaseEventTriggerListener {
             WorkflowTriggerJob.name,
             {
               workspaceId,
-              workflowId: eventListener.workflowId,
-              coreWorkflowVersionId: eventListener.coreWorkflowVersionId,
-              workspaceWorkflowVersionId:
-                eventListener.workspaceWorkflowVersionId,
-              payload: eventPayload,
+              workflowId:
+                eventListener.legacyWorkflowId ?? eventListener.workflowId,
+              ...buildCoreDispatchIds(eventListener),
+              payload: omitInheritedReadabilityChildRecords(eventPayload),
             },
             { retryLimit: 3 },
           );
@@ -395,14 +407,26 @@ export class WorkflowDatabaseEventTriggerListener {
     );
   }
 
+  private async resolveAdmittedRecordIds(
+    payload: WorkspaceEventBatch<ObjectRecordEvent>,
+  ): Promise<Set<string>> {
+    return resolveAutomationAdmittedRecordIds({
+      payload,
+      workspaceCacheService: this.workspaceCacheService,
+      recordAccessPolicyService: this.recordAccessPolicyService,
+    });
+  }
+
   private shouldTriggerJob({
     eventPayload,
     eventListener,
     action,
-  }: TriggerEvaluationArgs) {
+    admittedRecordIds,
+  }: TriggerEvaluationArgs & { admittedRecordIds: Set<string> }) {
     return (
       this.eventMatchesWatchedFields({ eventPayload, eventListener, action }) &&
-      this.eventMatchesRecordFilter({ eventPayload, eventListener })
+      this.eventMatchesRecordFilter({ eventPayload, eventListener }) &&
+      admittedRecordIds.has(eventPayload.recordId)
     );
   }
 

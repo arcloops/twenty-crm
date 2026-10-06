@@ -1,5 +1,6 @@
 import { Scope } from '@nestjs/common';
 
+import { isDefined } from 'twenty-shared/utils';
 import { StepStatus } from 'twenty-shared/workflow';
 
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -22,6 +23,7 @@ import { type RunWorkflowJobData } from 'src/modules/workflow/workflow-runner/ty
 import { buildRunWorkflowJobOptions } from 'src/modules/workflow/workflow-runner/utils/build-run-workflow-job-options.util';
 import { WorkflowRunWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run.workspace-service';
 
+// Drains delays queued before delays became time waits; new ones resume through ResumeWaitingWorkflowStepJob
 @Processor({
   queueName: MessageQueue.delayedJobsQueue,
   scope: Scope.REQUEST,
@@ -43,17 +45,22 @@ export class ResumeDelayedWorkflowJob {
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workflowRun = await this.workflowRunWorkspaceService.getWorkflowRun(
+        {
+          workflowRunId,
+          workspaceId,
+        },
+      );
+
+      if (!isDefined(workflowRun)) {
+        return;
+      }
+
+      if (workflowRun.status !== WorkflowRunStatus.RUNNING) {
+        return;
+      }
+
       try {
-        const workflowRun =
-          await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
-            workflowRunId,
-            workspaceId,
-          });
-
-        if (workflowRun.status !== WorkflowRunStatus.RUNNING) {
-          return;
-        }
-
         const step = workflowRun.state?.flow?.steps?.find(
           (step) => step.id === stepId,
         );

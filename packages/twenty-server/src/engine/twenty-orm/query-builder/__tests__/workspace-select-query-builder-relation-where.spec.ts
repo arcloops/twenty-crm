@@ -5,6 +5,7 @@ import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfa
 import { TwentyOrmException } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { applyFindOptionsToQueryBuilder } from 'src/engine/twenty-orm/query-builder/utils/apply-find-options.util';
 import { buildQueryBuilder } from 'src/engine/twenty-orm/query-builder/__tests__/workspace-select-query-builder-test-shapes.util';
+import { WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/query-builder/workspace-select-query-builder';
 
 describe('WorkspaceSelectQueryBuilder relation-keyed where', () => {
   it('should filter a to-many relation with a correlated EXISTS instead of a join', () => {
@@ -21,6 +22,41 @@ describe('WorkspaceSelectQueryBuilder relation-keyed where', () => {
     );
     expect(text).not.toContain('JOIN');
     expect(values).toEqual(['Twenty']);
+  });
+
+  it('should register a caller-written to-many condition as a correlated EXISTS', () => {
+    const { queryBuilder } = buildQueryBuilder();
+
+    const token = queryBuilder.addRelationExistsFilter({
+      relationFieldName: 'people',
+      applyWhere: (nestedBuilder) => {
+        nestedBuilder.where(`"${nestedBuilder.alias}"."name" = :name`, {
+          name: 'Twenty',
+        });
+      },
+    });
+
+    queryBuilder.setFindOptions({ select: { id: true } }).where(token);
+
+    const [text, values] = queryBuilder.getQueryAndParameters();
+
+    expect(text).toContain(
+      'EXISTS (SELECT 1 FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."company" AS "person_people_filter" WHERE "person_people_filter"."personId" = "person"."id" AND ("person_people_filter"."name" = $1) AND "person_people_filter"."deletedAt" IS NULL)',
+    );
+    expect(text).not.toContain('JOIN');
+    expect(text).not.toContain('__ormExistsFilter');
+    expect(values).toEqual(['Twenty']);
+  });
+
+  it('should reject an EXISTS filter on an unknown relation', () => {
+    const { queryBuilder } = buildQueryBuilder();
+
+    expect(() =>
+      queryBuilder.addRelationExistsFilter({
+        relationFieldName: 'unknown',
+        applyWhere: () => {},
+      }),
+    ).toThrow(TwentyOrmException);
   });
 
   it('should correlate a to-one relation on the parent join column', () => {
@@ -205,6 +241,11 @@ describe('WorkspaceSelectQueryBuilder relation-keyed where', () => {
 
     queryBuilder.where({ people: { name: Equal('Twenty') } });
 
-    expect(() => queryBuilder.delete()).toThrow(TwentyOrmException);
+    expect(() =>
+      WorkspaceSelectQueryBuilder.toMutationQueryBuilder(
+        queryBuilder,
+        'delete',
+      ),
+    ).toThrow(TwentyOrmException);
   });
 });

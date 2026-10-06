@@ -1,15 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-
-import v8 from 'v8';
+import { Injectable } from '@nestjs/common';
 
 import chunk from 'lodash.chunk';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
-import { In, type ObjectLiteral } from 'typeorm';
+import { In, MoreThan, type ObjectLiteral } from 'typeorm';
 
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type WorkspaceTransactionScope } from 'src/engine/twenty-orm/types/workspace-transaction-scope.type';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { getWorkspaceRepositoryWithOptionalTransaction } from 'src/engine/twenty-orm/utils/get-workspace-repository-with-optional-transaction.util';
 import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { type CalendarEventParticipantWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event-participant.workspace-entity';
@@ -31,15 +30,66 @@ type TargetWorkspaceEntity = Omit<ExistingTarget, 'parentId' | 'deletedAt'> & {
   deletedAt: string | null;
 };
 
-const BYTES_PER_MEGABYTE = 1024 * 1024;
-
 @Injectable()
 export class ParticipantTargetReconciliationService {
-  private readonly logger = new Logger(
-    ParticipantTargetReconciliationService.name,
-  );
-
   constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
+
+  public async reconcileTargetsForPeople({
+    personIds,
+    workspaceId,
+  }: {
+    personIds: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      for (const objectMetadataName of [
+        'messageParticipant',
+        'calendarEventParticipant',
+      ] as const) {
+        for (const personIdChunk of chunk(
+          [...new Set(personIds)],
+          QUERY_MAX_RECORDS,
+        )) {
+          let lastParticipantId: string | undefined;
+          let hasMoreParticipants = true;
+
+          while (hasMoreParticipants) {
+            await this.workspaceOrmManager.runInWorkspaceTransaction(
+              async (transactionScope) => {
+                const participantRepository = await this.getRepository<
+                  | MessageParticipantWorkspaceEntity
+                  | CalendarEventParticipantWorkspaceEntity
+                >(objectMetadataName, transactionScope);
+                const participants = await participantRepository.find({
+                  where: {
+                    personId: In(personIdChunk),
+                    ...(isDefined(lastParticipantId)
+                      ? { id: MoreThan(lastParticipantId) }
+                      : {}),
+                  },
+                  order: { id: 'ASC' },
+                  take: QUERY_MAX_RECORDS,
+                });
+
+                await this.reconcileParticipantTargets({
+                  objectMetadataName,
+                  sourceRecordIds: participants.map((participant) =>
+                    'messageId' in participant
+                      ? participant.messageId
+                      : participant.calendarEventId,
+                  ),
+                  transactionScope,
+                });
+
+                lastParticipantId = participants[participants.length - 1]?.id;
+                hasMoreParticipants = participants.length === QUERY_MAX_RECORDS;
+              },
+            );
+          }
+        }
+      }
+    }, buildSystemAuthContext(workspaceId));
+  }
 
   public async reconcileParticipantTargets({
     sourceRecordIds,
@@ -152,35 +202,19 @@ export class ParticipantTargetReconciliationService {
     messageThreadIds: string[];
     transactionScope?: WorkspaceTransactionScope;
   }): Promise<void> {
-    const uniqueMessageThreadIds = [...new Set(messageThreadIds)];
-
-    if (uniqueMessageThreadIds.length === 0) {
-      return;
-    }
-
     const messageRepository = await this.getRepository<MessageWorkspaceEntity>(
       'message',
       transactionScope,
     );
 
-    // TODO: diagnostic only — remove once the worker OOM root cause is confirmed.
-    // Size what one reconcile loads and how much heap it retains, to confirm
-    // whether this path (added in #24778) drives worker memory.
-    const heapUsedBeforeBytes = v8.getHeapStatistics().used_heap_size;
-    let messagesLoaded = 0;
-    let participantsLoaded = 0;
-
     for (const messageThreadIdChunk of chunk(
-      uniqueMessageThreadIds,
+      [...new Set(messageThreadIds)],
       QUERY_MAX_RECORDS,
     )) {
       const threadMessages = await messageRepository.find({
         where: { messageThreadId: In(messageThreadIdChunk) },
         select: { id: true, messageThreadId: true },
       });
-
-      messagesLoaded += threadMessages.length;
-
       const messageThreadIdByMessageId = new Map<string, string>();
 
       for (const { id, messageThreadId } of threadMessages) {
@@ -209,8 +243,6 @@ export class ParticipantTargetReconciliationService {
         );
       }
 
-      participantsLoaded += participants.length;
-
       await this.reconcileTargets({
         parentIds: messageThreadIdChunk,
         parentFieldName: 'messageThreadId',
@@ -223,14 +255,6 @@ export class ParticipantTargetReconciliationService {
         transactionScope,
       });
     }
-
-    const heapDeltaMegabytes =
-      (v8.getHeapStatistics().used_heap_size - heapUsedBeforeBytes) /
-      BYTES_PER_MEGABYTE;
-
-    this.logger.log(
-      `[ReconcileMem] messageThreadTarget threads=${uniqueMessageThreadIds.length} messagesLoaded=${messagesLoaded} participantsLoaded=${participantsLoaded} heapDeltaMB=${heapDeltaMegabytes.toFixed(1)}`,
-    );
   }
 
   private async reconcileTargets({
@@ -250,10 +274,8 @@ export class ParticipantTargetReconciliationService {
       return;
     }
 
-    // Existing workspaces only gain the target junction objects once the
-    // upgrade metadata sync has run; until then reconciliation must no-op so
-    // message and calendar imports keep succeeding. The backfill that follows
-    // the sync covers rows imported during that window.
+    // Target junction objects exist only after the upgrade metadata sync; no-op until then so imports keep
+    // succeeding, and the following backfill covers the gap
     if (
       !isDefined(getWorkspaceContext().objectIdByNameSingular[targetObjectName])
     ) {
@@ -292,8 +314,7 @@ export class ParticipantTargetReconciliationService {
       existingTargets,
     });
 
-    // Targets per parent are unbounded, so write batches are re-chunked to
-    // stay under the ORM's per-call record cap.
+    // Targets per parent are unbounded, so re-chunk under the ORM's per-call record cap
     for (const targetsToCreateChunk of chunk(
       operations.targetsToCreate,
       QUERY_MAX_RECORDS,
@@ -370,8 +391,7 @@ export class ParticipantTargetReconciliationService {
       where: { id: In(personIds) },
       select: { id: true, companyId: true },
     });
-    // find() excludes soft-deleted people, so this set keeps desired targets
-    // aligned with the backfill, which only joins live people.
+    // find() excludes soft-deleted people, matching the backfill which joins live people only
     const livePersonIds = new Set(people.map(({ id }) => id));
     const companyIdByPersonId = new Map(
       people.map(({ id, companyId }) => [id, companyId]),

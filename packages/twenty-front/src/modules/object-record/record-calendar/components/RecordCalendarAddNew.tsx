@@ -1,6 +1,6 @@
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { getFieldPermissions } from '@/object-metadata/utils/getFieldPermissions';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { isFieldMetadataReadOnlyByPermissions } from '@/object-record/read-only/utils/internal/isFieldMetadataReadOnlyByPermissions';
 import { useRecordCalendarContextOrThrow } from '@/object-record/record-calendar/contexts/RecordCalendarContext';
 import { isRecordCalendarReadOnlyComponentState } from '@/object-record/record-calendar/states/isRecordCalendarReadOnlyComponentState';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
@@ -17,8 +17,8 @@ import { type Temporal } from 'temporal-polyfill';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { IconPlus } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledButtonContainer = styled.div`
   height: auto;
@@ -37,7 +37,7 @@ export const RecordCalendarAddNew = ({
     isRecordCalendarReadOnlyComponentState,
   );
 
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { userTimezone } = useUserTimezone();
   const { objectMetadataItem } = useRecordCalendarContextOrThrow();
   const { createNewIndexRecord } = useCreateNewIndexRecord({
@@ -62,20 +62,18 @@ export const RecordCalendarAddNew = ({
 
   const isCalendarFieldReadOnly = calendarFieldMetadataItem
     ? calendarFieldMetadataItem.isUIEditable === false ||
-      isFieldMetadataReadOnlyByPermissions({
+      !getFieldPermissions({
         objectPermissions,
         fieldMetadataId: calendarFieldMetadataItem.id,
-      })
+      }).canUpdateField
     : false;
 
-  // Creating in a nested relation widget requires picking the related record
-  // to create through, which only the table layout offers today.
-  const nestedRelationCreateThrough = useContext(
-    RecordTableWidgetContext,
-  )?.nestedRelationCreateThrough;
+  // Creating through a nested relation or junction needs a record picker only the table layout offers.
+  const recordTableWidgetContext = useContext(RecordTableWidgetContext);
 
   if (
-    isDefined(nestedRelationCreateThrough) ||
+    isDefined(recordTableWidgetContext?.nestedRelationCreateThrough) ||
+    isDefined(recordTableWidgetContext?.junctionCreateThrough) ||
     isRecordCalendarReadOnly ||
     hasAnySoftDeleteFilterOnView === true ||
     !canCreateRecordsForObjectMetadataItem({
@@ -91,7 +89,7 @@ export const RecordCalendarAddNew = ({
   return (
     <StyledButtonContainer>
       <Button
-        ariaLabel={t`Create record`}
+        aria-label={t`Create record`}
         onClick={async (event) => {
           event.stopPropagation();
 
@@ -107,10 +105,10 @@ export const RecordCalendarAddNew = ({
             [calendarFieldMetadataItem.name]: startValue,
           });
         }}
-        size="medium"
+        size="md"
         type="button"
-        variant="tertiary"
-        Icon={() => <IconPlus size={theme.icon.size.sm} />}
+        startIcon={<IconPlus size={theme.icon.size.sm} />}
+        variant="ghost"
       />
     </StyledButtonContainer>
   );

@@ -6,7 +6,7 @@ import { isDefined } from 'twenty-sdk/utils';
 import {
   SLACK_CHANNEL_WELCOME_UNIVERSAL_IDENTIFIER,
   SLACK_ENTITY_DETAILS_UNIVERSAL_IDENTIFIER,
-  SLACK_EVENTS_ENQUEUE_UNIVERSAL_IDENTIFIER,
+  SLACK_ASSISTANT_REQUEST_UNIVERSAL_IDENTIFIER,
   SLACK_EVENTS_ROUTE_UNIVERSAL_IDENTIFIER,
   SLACK_HOME_OPENED_UNIVERSAL_IDENTIFIER,
   SLACK_INSTALL_REVOKED_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER,
@@ -15,6 +15,7 @@ import {
 import { type SlackEventsRequestBody } from 'src/logic-functions/types/slack-events-request-body.type';
 import { findClaimedWorkspaceId } from 'src/logic-functions/utils/find-claimed-workspace-id';
 import { resolveTargetWorkspaceId } from 'src/logic-functions/utils/resolve-target-workspace-id';
+import { logSlackRetryDelivery } from 'src/logic-functions/utils/log-slack-retry-delivery';
 import { verifySlackWebhookRequestOrThrow } from 'src/logic-functions/utils/verify-slack-webhook-request-or-throw';
 
 type SlackEventsResolverResult =
@@ -29,6 +30,8 @@ export const slackEventsResolverHandler = async (
   routePayload: RoutePayload<SlackEventsRequestBody>,
 ): Promise<SlackEventsResolverResult> => {
   verifySlackWebhookRequestOrThrow(routePayload);
+
+  logSlackRetryDelivery({ headers: routePayload.headers, source: 'events' });
 
   const body = routePayload.body;
 
@@ -92,7 +95,7 @@ const resolveTargetLogicFunctionUniversalIdentifier = (
     case 'tokens_revoked':
       return SLACK_INSTALL_REVOKED_LOGIC_FUNCTION_UNIVERSAL_IDENTIFIER;
     default:
-      return SLACK_EVENTS_ENQUEUE_UNIVERSAL_IDENTIFIER;
+      return SLACK_ASSISTANT_REQUEST_UNIVERSAL_IDENTIFIER;
   }
 };
 
@@ -104,6 +107,11 @@ export default defineLogicFunction({
   timeoutSeconds: 15,
   handler: slackEventsResolverHandler,
   serverRouteTriggerSettings: {
-    forwardedRequestHeaders: ['x-slack-signature', 'x-slack-request-timestamp'],
+    forwardedRequestHeaders: [
+      'x-slack-signature',
+      'x-slack-request-timestamp',
+      'x-slack-retry-num',
+      'x-slack-retry-reason',
+    ],
   },
 });

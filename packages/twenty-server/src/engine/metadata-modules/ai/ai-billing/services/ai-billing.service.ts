@@ -1,23 +1,24 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { type LanguageModelUsage } from 'ai';
-import { NO_BILLING_SUBSCRIPTION } from 'src/engine/core-modules/billing/constants/no-billing-subscription.constant';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
-import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
-
+import { UsageLimitQuotaService } from 'src/engine/core-modules/usage-limit/services/usage-limit-quota.service';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
 import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { UsageRecorderService } from 'src/engine/core-modules/usage/services/usage-recorder.service';
+import { type RecordUsageInput } from 'src/engine/core-modules/usage/types/record-usage-input.type';
+import { type UsageSpenders } from 'src/engine/core-modules/usage/types/usage-spenders.type';
 import { NATIVE_WEB_SEARCH_COST_PER_CALL_DOLLARS } from 'src/engine/metadata-modules/ai/ai-billing/constants/native-web-search-cost-per-call-dollars';
-import { computeCostBreakdown } from 'src/engine/metadata-modules/ai/ai-billing/utils/compute-cost-breakdown.util';
-import { convertDollarsToBillingCredits } from 'src/engine/metadata-modules/ai/ai-billing/utils/convert-dollars-to-billing-credits.util';
+import { type BillingTokenUsage } from 'src/engine/metadata-modules/ai/ai-billing/types/billing-token-usage.type';
+import { computeStepCostBreakdown } from 'src/engine/metadata-modules/ai/ai-billing/utils/compute-step-cost-breakdown.util';
+import { convertDollarsToCreditsMicro } from 'src/engine/metadata-modules/ai/ai-billing/utils/convert-dollars-to-credits-micro.util';
+import { extractCacheCreationTokens } from 'src/engine/metadata-modules/ai/ai-billing/utils/extract-cache-creation-tokens.util';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { type AiModelCostConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-cost-config.type';
 import { type ModelId } from 'src/engine/metadata-modules/ai/ai-models/types/model-id.type';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 export type BillingUsageInput = {
-  usage: LanguageModelUsage;
+  usage: BillingTokenUsage;
   cacheCreationTokens?: number;
 };
 
@@ -28,22 +29,60 @@ export class AiBillingService {
   constructor(
     private readonly usageRecorderService: UsageRecorderService,
     private readonly aiModelRegistryService: AiModelRegistryService,
-    private readonly billingService: BillingService,
     private readonly billingUsageService: BillingUsageService,
-    private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly usageLimitQuotaService: UsageLimitQuotaService,
   ) {}
 
-  calculateCost(modelId: ModelId, billingInput: BillingUsageInput): number {
-    const model = this.aiModelRegistryService.getEffectiveModelConfig(modelId);
-    const { usage, cacheCreationTokens = 0 } = billingInput;
-
-    const breakdown = computeCostBreakdown(model, {
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      reasoningTokens: usage.outputTokenDetails?.reasoningTokens,
-      cachedInputTokens: usage.inputTokenDetails?.cacheReadTokens,
-      cacheCreationTokens,
+  async assertAiExecutionAllowed({
+    workspaceId,
+    operationType,
+    spenders,
+  }: {
+    workspaceId: string;
+    operationType: UsageOperationType;
+    spenders: UsageSpenders;
+  }): Promise<void> {
+    await this.billingUsageService.assertUsageAllowed({
+      workspaceId,
+      resourceType: UsageResourceType.AI,
+      operationType,
+      spenders,
     });
+  }
+
+  // evaluation models first: getEffectiveModelConfig throws on ids outside its registry
+  private getCostConfig(modelId: ModelId): AiModelCostConfig {
+    return (
+      this.aiModelRegistryService.getEvaluationModelConfig(modelId) ??
+      this.aiModelRegistryService.getEffectiveModelConfig(modelId)
+    );
+  }
+
+  calculateStepsCost(
+    modelId: ModelId,
+    steps: {
+      usage: BillingTokenUsage;
+      providerMetadata?: Record<string, Record<string, unknown> | undefined>;
+    }[],
+  ): number {
+    const model = this.getCostConfig(modelId);
+
+    return steps.reduce(
+      (costInDollars, step) =>
+        costInDollars +
+        computeStepCostBreakdown(model, {
+          usage: step.usage,
+          cacheCreationTokens: extractCacheCreationTokens(
+            step.providerMetadata,
+          ),
+        }).totalCostInDollars,
+      0,
+    );
+  }
+
+  calculateCost(modelId: ModelId, billingInput: BillingUsageInput): number {
+    const model = this.getCostConfig(modelId);
+    const breakdown = computeStepCostBreakdown(model, billingInput);
 
     this.logger.log(
       `Cost for ${model.modelId}: $${breakdown.totalCostInDollars.toFixed(6)} ` +
@@ -66,53 +105,59 @@ export class AiBillingService {
     userWorkspaceId?: string | null,
   ): Promise<void> {
     const costInDollars = this.calculateCost(modelId, billingInput);
-    const creditsUsedMicro = Math.round(
-      convertDollarsToBillingCredits(costInDollars),
-    );
+    const creditsUsedMicro = convertDollarsToCreditsMicro(costInDollars);
 
     const totalTokens =
       (billingInput.usage.inputTokens ?? 0) +
       (billingInput.usage.outputTokens ?? 0);
 
-    if (this.billingService.isBillingEnabled()) {
-      await this.billingUsageService.decrementAvailableCreditsInCache({
-        workspaceId,
-        usedCredits: creditsUsedMicro,
-      });
-    }
-
-    await this.emitAiTokenUsageEvent(
+    await this.usageLimitQuotaService.charge({
       workspaceId,
-      creditsUsedMicro,
-      totalTokens,
-      modelId,
-      operationType,
-      agentId,
-      userWorkspaceId,
-    );
+      events: [
+        this.buildAiTokenUsageEvent({
+          creditsUsedMicro,
+          totalTokens,
+          modelId,
+          operationType,
+          spenders: { userWorkspaceId, agentId },
+        }),
+      ],
+    });
   }
 
-  async decrementAndCheckAvailableCredits(
-    modelId: ModelId,
-    billingInput: BillingUsageInput,
-    workspaceId: string,
-  ): Promise<{ hasNoMoreAvailableCredits: boolean }> {
-    if (!this.billingService.isBillingEnabled()) {
-      return { hasNoMoreAvailableCredits: false };
-    }
-
+  async decrementAndCheckAvailableCredits({
+    modelId,
+    billingInput,
+    workspaceId,
+    operationType,
+    spenders,
+  }: {
+    modelId: ModelId;
+    billingInput: BillingUsageInput;
+    workspaceId: string;
+    operationType: UsageOperationType;
+    spenders: UsageSpenders;
+  }): Promise<{ hasNoMoreAvailableCredits: boolean }> {
     const costInDollars = this.calculateCost(modelId, billingInput);
-    const creditsUsedMicro = Math.round(
-      convertDollarsToBillingCredits(costInDollars),
-    );
+    const creditsUsedMicro = convertDollarsToCreditsMicro(costInDollars);
 
-    const remainingCredits =
-      await this.billingUsageService.decrementAvailableCreditsInCache({
+    const totalTokens =
+      (billingInput.usage.inputTokens ?? 0) +
+      (billingInput.usage.outputTokens ?? 0);
+
+    const { exhaustedKind } =
+      await this.usageLimitQuotaService.debitAheadOfRecord({
         workspaceId,
-        usedCredits: creditsUsedMicro,
+        event: this.buildAiTokenUsageEvent({
+          creditsUsedMicro,
+          totalTokens,
+          modelId,
+          operationType,
+          spenders,
+        }),
       });
 
-    return { hasNoMoreAvailableCredits: remainingCredits <= 0 };
+    return { hasNoMoreAvailableCredits: exhaustedKind === 'allowance' };
   }
 
   async billNativeWebSearchUsage(
@@ -126,38 +171,25 @@ export class AiBillingService {
 
     const costInDollars =
       nativeWebSearchCallCount * NATIVE_WEB_SEARCH_COST_PER_CALL_DOLLARS;
-    const creditsUsedMicro = Math.round(
-      convertDollarsToBillingCredits(costInDollars),
-    );
+    const creditsUsedMicro = convertDollarsToCreditsMicro(costInDollars);
 
     this.logger.log(
       `Native web search billing: ${nativeWebSearchCallCount} calls, $${costInDollars.toFixed(4)}`,
     );
 
-    if (this.billingService.isBillingEnabled()) {
-      const { currentBillingSubscription } =
-        await this.workspaceCacheService.getOrRecompute(workspaceId, [
-          'currentBillingSubscription',
-        ]);
-
-      if (currentBillingSubscription !== NO_BILLING_SUBSCRIPTION) {
-        await this.billingUsageService.decrementAvailableCreditsInCache({
-          workspaceId,
-          usedCredits: creditsUsedMicro,
-        });
-      }
-    }
-
-    await this.usageRecorderService.record(workspaceId, [
-      {
-        resourceType: UsageResourceType.AI,
-        operationType: UsageOperationType.WEB_SEARCH,
-        creditsUsedMicro,
-        quantity: nativeWebSearchCallCount,
-        unit: UsageUnit.INVOCATION,
-        spenders: { userWorkspaceId },
-      },
-    ]);
+    await this.usageLimitQuotaService.charge({
+      workspaceId,
+      events: [
+        {
+          resourceType: UsageResourceType.AI,
+          operationType: UsageOperationType.WEB_SEARCH,
+          creditsUsedMicro,
+          quantity: nativeWebSearchCallCount,
+          unit: UsageUnit.INVOCATION,
+          spenders: { userWorkspaceId },
+        },
+      ],
+    });
   }
 
   async emitAiTokenUsageEvent(
@@ -170,16 +202,38 @@ export class AiBillingService {
     userWorkspaceId?: string | null,
   ): Promise<void> {
     await this.usageRecorderService.record(workspaceId, [
-      {
-        resourceType: UsageResourceType.AI,
-        operationType,
+      this.buildAiTokenUsageEvent({
         creditsUsedMicro,
-        quantity: totalTokens,
-        unit: UsageUnit.TOKEN,
-        resourceId: agentId || null,
-        resourceContext: modelId,
+        totalTokens,
+        modelId,
+        operationType,
         spenders: { userWorkspaceId, agentId },
-      },
+      }),
     ]);
+  }
+
+  private buildAiTokenUsageEvent({
+    creditsUsedMicro,
+    totalTokens,
+    modelId,
+    operationType,
+    spenders,
+  }: {
+    creditsUsedMicro: number;
+    totalTokens: number;
+    modelId: ModelId;
+    operationType: UsageOperationType;
+    spenders: UsageSpenders;
+  }): RecordUsageInput {
+    return {
+      resourceType: UsageResourceType.AI,
+      operationType,
+      creditsUsedMicro,
+      quantity: totalTokens,
+      unit: UsageUnit.TOKEN,
+      resourceId: spenders.agentId || null,
+      resourceContext: modelId,
+      spenders,
+    };
   }
 }

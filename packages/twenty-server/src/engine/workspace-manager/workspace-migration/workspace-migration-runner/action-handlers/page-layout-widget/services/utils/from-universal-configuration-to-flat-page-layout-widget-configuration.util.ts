@@ -366,28 +366,18 @@ export const fromUniversalConfigurationToFlatPageLayoutWidgetConfiguration = ({
           })
         : undefined;
 
-      let viewId: string | undefined = undefined;
-
-      if (isDefined(viewUniversalIdentifier)) {
-        const flatView = findFlatEntityByUniversalIdentifier({
-          flatEntityMaps: flatViewMaps,
-          universalIdentifier: viewUniversalIdentifier,
-        });
-
-        if (!isDefined(flatView)) {
-          throw new FlatEntityMapsException(
-            `View not found for universal identifier: ${viewUniversalIdentifier}`,
-            FlatEntityMapsExceptionCode.ENTITY_NOT_FOUND,
-          );
-        }
-
-        viewId = flatView.id;
-      }
+      // Standard views sync separately from page layouts, so a widget may precede its view and render empty until it lands
+      const flatView = isDefined(viewUniversalIdentifier)
+        ? findFlatEntityByUniversalIdentifier({
+            flatEntityMaps: flatViewMaps,
+            universalIdentifier: viewUniversalIdentifier,
+          })
+        : undefined;
 
       return {
         ...rest,
         fieldMetadataId,
-        viewId,
+        viewId: flatView?.id,
         ...(isDefined(nestedRelationFieldMetadataId)
           ? { nestedRelationFieldMetadataId }
           : {}),
@@ -410,6 +400,8 @@ export const fromUniversalConfigurationToFlatPageLayoutWidgetConfiguration = ({
     case WidgetConfigurationType.EMAIL_THREAD:
     case WidgetConfigurationType.CALL_RECORDING_SUMMARY:
     case WidgetConfigurationType.CALL_RECORDING_TRANSCRIPT:
+    case WidgetConfigurationType.CHAT_THREADS:
+    case WidgetConfigurationType.CHAT:
     case WidgetConfigurationType.MESSAGE_CAMPAIGN_BODY:
     case WidgetConfigurationType.MESSAGE_CAMPAIGN_DETAILS:
       return universalConfiguration;

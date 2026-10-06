@@ -1,6 +1,7 @@
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
+import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { type SpeedLimitDefault } from 'src/engine/core-modules/usage-limit/types/speed-limit-default.type';
 import { type FlatUsageLimit } from 'src/engine/core-modules/usage-limit/types/flat-usage-limit.type';
 import { buildSpeedBuckets } from 'src/engine/core-modules/usage-limit/utils/build-speed-buckets.util';
@@ -15,7 +16,7 @@ const SPEED_LIMIT_DEFAULTS: SpeedLimitDefault[] = [
     counterScope: 'perWorkspace',
     maxTokens: 100,
     windowMs: 1000,
-    isOverridable: true,
+    isOverridable: false,
   },
   {
     spenderType: 'apiKey',
@@ -42,9 +43,10 @@ const buildLimit = (overrides: Partial<FlatUsageLimit>): FlatUsageLimit => ({
   limitKind: 'speed',
   periodCount: 60,
   periodUnit: 'second',
-  meter: 'quantity',
+  unit: UsageUnit.REQUEST,
   limitValue: 100,
   burstValue: null,
+  isInstanceOverride: false,
   ...overrides,
 });
 
@@ -96,7 +98,7 @@ const systemContext = { type: 'system', workspace } as WorkspaceAuthContext;
 // workspace-wide counter and applications against a cross-workspace one, and
 // left every other caller alone.
 describe('buildSpeedBuckets with no limits configured', () => {
-  it('meters an api key against one shared counter per window', () => {
+  it('counts an api key against one shared counter per window', () => {
     expect(buildBuckets({ authContext: apiKeyContext })).toEqual([
       expect.objectContaining({
         key: '{workspace-1}:speed:API:API_REQUEST:apiKey:-:1',
@@ -112,7 +114,7 @@ describe('buildSpeedBuckets with no limits configured', () => {
     ]);
   });
 
-  it('meters an application against one counter across every workspace', () => {
+  it('counts an application against one counter across every workspace', () => {
     expect(buildBuckets({ authContext: applicationContext })).toEqual([
       expect.objectContaining({
         key: '{server}:speed:API:API_REQUEST:application:app-uid:60',
@@ -147,7 +149,7 @@ describe('buildSpeedBuckets for a spender no application identifies', () => {
     },
   ];
 
-  it('meters a system sender against one counter across every workspace', () => {
+  it('counts a system sender against one counter across every workspace', () => {
     expect(
       buildBuckets({
         authContext: systemContext,
@@ -163,7 +165,7 @@ describe('buildSpeedBuckets for a spender no application identifies', () => {
     ]);
   });
 
-  it('meters a user request against that same counter', () => {
+  it('counts a user request against that same counter', () => {
     const [bucket] = buildBuckets({
       authContext: userContext,
       speedLimitDefaults: WORKSPACE_DEFAULTS,
@@ -222,6 +224,7 @@ describe('buildSpeedBuckets with limits configured', () => {
     expect(buckets.map((bucket) => bucket.key)).toEqual([
       '{workspace-1}:speed:API:API_REQUEST:apiKey:key-1:60',
       '{workspace-1}:speed:API:API_REQUEST:apiKey:-:60',
+      '{workspace-1}:speed:API:API_REQUEST:apiKey:-:1',
     ]);
   });
 
@@ -238,7 +241,7 @@ describe('buildSpeedBuckets with limits configured', () => {
     ]);
   });
 
-  it('replaces every default once a limit covers the spender type', () => {
+  it('replaces the overridable default but stays under the burst ceiling', () => {
     const buckets = buildBuckets({
       authContext: apiKeyContext,
       limits: [buildLimit({ spenderId: '', periodCount: 60, limitValue: 10 })],
@@ -246,7 +249,10 @@ describe('buildSpeedBuckets with limits configured', () => {
 
     expect(
       buckets.map((bucket) => [bucket.windowMs, bucket.refillPerWindow]),
-    ).toEqual([[60_000, 10]]);
+    ).toEqual([
+      [60_000, 10],
+      [1000, 100],
+    ]);
   });
 
   it('tells the platform default apart from a configured limit', () => {
@@ -291,6 +297,7 @@ describe('buildSpeedBuckets with limits configured', () => {
     expect(buckets.map((bucket) => bucket.key)).toEqual([
       '{workspace-1}:speed:API:ALL:apiKey:-:60',
       '{workspace-1}:speed:API:API_REQUEST:apiKey:-:60',
+      '{workspace-1}:speed:API:API_REQUEST:apiKey:-:1',
     ]);
   });
 
@@ -304,7 +311,7 @@ describe('buildSpeedBuckets with limits configured', () => {
           spenderId: '',
           periodCount: 1,
           periodUnit: 'month',
-          meter: 'creditsUsedMicro',
+          unit: UsageUnit.CREDIT,
         }),
       ],
     });
@@ -330,5 +337,39 @@ describe('buildSpeedBuckets with limits configured', () => {
         refillPerWindow: 1000,
       }),
     ]);
+  });
+  it('builds a workspace bucket and a server-wide bucket for an email send, narrowest first', () => {
+    const systemContext = { type: 'system', workspace } as WorkspaceAuthContext;
+
+    const buckets = buildSpeedBuckets({
+      speedLimitDefaults: [
+        {
+          spenderType: 'workspace',
+          counterScope: 'perWorkspace',
+          maxTokens: 50,
+          windowMs: 10_000,
+          isOverridable: true,
+        },
+        {
+          spenderType: 'workspace',
+          counterScope: 'crossWorkspace',
+          maxTokens: 100,
+          windowMs: 10_000,
+          isOverridable: false,
+        },
+      ],
+      limits: [],
+      authContext: systemContext,
+      resourceType: UsageResourceType.EMAIL,
+      operationType: UsageOperationType.EMAIL_SEND,
+    });
+
+    // A send has to fit both, and the workspace bucket comes first so a refusal
+    // names it rather than the server-wide one.
+    expect(buckets.map((bucket) => bucket.key)).toEqual([
+      '{workspace-1}:speed:EMAIL:EMAIL_SEND:workspace:-:10',
+      '{server}:speed:EMAIL:EMAIL_SEND:workspace:-:10',
+    ]);
+    expect(buckets.map((bucket) => bucket.burst)).toEqual([50, 100]);
   });
 });

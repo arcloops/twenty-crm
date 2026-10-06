@@ -21,10 +21,13 @@ export const fromCommandMenuItemManifestToUniversalFlatCommandMenuItem = ({
     position: 0,
     icon: commandMenuItemManifest.icon ?? null,
     isPinned: commandMenuItemManifest.isPinned ?? false,
-    availabilityType: (commandMenuItemManifest.availabilityType ??
-      CommandMenuItemAvailabilityType.GLOBAL) as CommandMenuItemAvailabilityType,
+    availabilityType:
+      commandMenuItemManifest.availabilityType ??
+      CommandMenuItemAvailabilityType.GLOBAL,
     conditionalAvailabilityExpression:
       commandMenuItemManifest.conditionalAvailabilityExpression ?? null,
+    conditionalPinnedExpression:
+      commandMenuItemManifest.conditionalPinnedExpression ?? null,
     frontComponentUniversalIdentifier:
       commandMenuItemManifest.frontComponentUniversalIdentifier,
     availabilityObjectMetadataUniversalIdentifier:
@@ -34,6 +37,7 @@ export const fromCommandMenuItemManifestToUniversalFlatCommandMenuItem = ({
     payload: null,
     hotKeys: null,
     workflowVersionId: null,
+    coreWorkflowVersionId: null,
     pageLayoutUniversalIdentifier: null,
     isActive: true,
     isSystemSideEffect: false,

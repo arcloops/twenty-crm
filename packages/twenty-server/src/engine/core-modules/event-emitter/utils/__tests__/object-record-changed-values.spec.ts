@@ -1,7 +1,9 @@
 import {
   FieldMetadataType,
+  MetadataReadability,
   MetadataWritability,
   ObjectOpenRecordIn,
+  ObjectSharingReach,
   RelationType,
 } from 'twenty-shared/types';
 
@@ -31,6 +33,7 @@ const mockObjectMetadata: FlatObjectMetadata = {
   isSearchable: true,
   indexMetadataIds: [],
   searchFieldMetadataIds: [],
+  navigationMenuItemIds: [],
   commandMenuItemIds: [],
   objectPermissionIds: [],
   fieldPermissionIds: [],
@@ -47,6 +50,9 @@ const mockObjectMetadata: FlatObjectMetadata = {
   isUIEditable: true,
   isUICreatable: true,
   writability: MetadataWritability.OPEN,
+  readability: MetadataReadability.OPEN,
+  readabilityParentFieldUniversalIdentifiers: null,
+  sharingReach: ObjectSharingReach.WORKSPACE,
   openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
   labelIdentifierFieldMetadataId: null,
   imageIdentifierFieldMetadataId: null,
@@ -59,6 +65,7 @@ const mockObjectMetadata: FlatObjectMetadata = {
   pageLayoutUniversalIdentifiers: [],
   indexMetadataUniversalIdentifiers: [],
   searchFieldMetadataUniversalIdentifiers: [],
+  navigationMenuItemUniversalIdentifiers: [],
   commandMenuItemUniversalIdentifiers: [],
   labelIdentifierFieldMetadataUniversalIdentifier: null,
   imageIdentifierFieldMetadataUniversalIdentifier: null,

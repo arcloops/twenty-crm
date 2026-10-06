@@ -16,8 +16,8 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
-import { RolePermissionFlagEntity } from 'src/engine/metadata-modules/role-permission-flag/role-permission-flag.entity';
-import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
+import { hasRoleWideAccessToPermissionFlag } from 'src/engine/metadata-modules/permissions/utils/has-role-wide-access-to-permission-flag.util';
+import { type RolePermissionFlagEntity } from 'src/engine/metadata-modules/role-permission-flag/role-permission-flag.entity';
 import { WorkspaceCache } from 'src/engine/workspace-cache/decorators/workspace-cache.decorator';
 import { type WorkspaceCacheProviderContext } from 'src/engine/workspace-cache/types/workspace-cache-provider-context.type';
 import { type WorkspaceCacheRowsRequirement } from 'src/engine/workspace-cache/types/workspace-cache-rows-requirement.type';
@@ -87,17 +87,24 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
     for (const role of roles) {
       const roleObjectPermissions =
         objectPermissions.byRoleId.get(role.id) ?? [];
-      const roleRolePermissionFlags = (
-        rolePermissionFlags.byRoleId.get(role.id) ?? []
-      ).map(
-        (rolePermissionFlagRow) =>
-          ({
-            ...rolePermissionFlagRow,
-            permissionFlag: permissionFlagById.get(
-              rolePermissionFlagRow.permissionFlagId,
-            ),
-          }) as RolePermissionFlagEntity,
+      const assignedPermissionFlagUniversalIdentifiers = new Set(
+        (rolePermissionFlags.byRoleId.get(role.id) ?? []).map(
+          (rolePermissionFlagRow) =>
+            this.getRolePermissionFlagUniversalIdentifier({
+              ...rolePermissionFlagRow,
+              permissionFlag: permissionFlagById.get(
+                rolePermissionFlagRow.permissionFlagId,
+              ),
+            } as RolePermissionFlagEntity),
+        ),
       );
+      const isRolePermissionFlagGranted = (
+        permissionFlag: PermissionFlagType,
+      ): boolean =>
+        hasRoleWideAccessToPermissionFlag({ role, permissionFlag }) ||
+        assignedPermissionFlagUniversalIdentifiers.has(
+          SystemPermissionFlag[permissionFlag],
+        );
       const roleFieldPermissions = fieldPermissions.byRoleId.get(role.id) ?? [];
 
       const roleRowLevelPermissionPredicates =
@@ -128,12 +135,9 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
           );
 
         if (isWorkflowRelatedObject) {
-          const hasWorkflowsPermissions =
-            this.hasSettingsGatedObjectPermissions(
-              role,
-              roleRolePermissionFlags,
-              PermissionFlagType.WORKFLOWS,
-            );
+          const hasWorkflowsPermissions = isRolePermissionFlagGranted(
+            PermissionFlagType.WORKFLOWS,
+          );
 
           canRead = hasWorkflowsPermissions;
           canUpdate = hasWorkflowsPermissions;
@@ -141,12 +145,9 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
           canDestroy = hasWorkflowsPermissions;
         } else {
           if (isWorkspaceMemberObject) {
-            const hasWorkspaceMembersPermissions =
-              this.hasSettingsGatedObjectPermissions(
-                role,
-                roleRolePermissionFlags,
-                PermissionFlagType.WORKSPACE_MEMBERS,
-              );
+            const hasWorkspaceMembersPermissions = isRolePermissionFlagGranted(
+              PermissionFlagType.WORKSPACE_MEMBERS,
+            );
 
             canRead = true;
             canUpdate = hasWorkspaceMembersPermissions;
@@ -159,7 +160,7 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
             );
 
             const getPermissionValue = (
-              overrideValue: boolean | undefined,
+              overrideValue: boolean | null | undefined,
               defaultValue: boolean,
             ) => overrideValue ?? (isSystem ? true : defaultValue);
 
@@ -205,6 +206,19 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
           }
         }
 
+        if (
+          universalIdentifier ===
+          STANDARD_OBJECTS.agentChatThread.universalIdentifier
+        ) {
+          const hasAiPermission = isRolePermissionFlagGranted(
+            PermissionFlagType.AI,
+          );
+          canRead = canRead && hasAiPermission;
+          canUpdate = canUpdate && hasAiPermission;
+          canSoftDelete = canSoftDelete && hasAiPermission;
+          canDestroy = canDestroy && hasAiPermission;
+        }
+
         objectRecordsPermissions[objectMetadataId] = {
           canReadObjectRecords: canRead,
           canUpdateObjectRecords: canUpdate,
@@ -230,30 +244,10 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
     return permissionsByRoleId;
   }
 
-  private hasSettingsGatedObjectPermissions(
-    role: RoleEntity,
-    rolePermissionFlags: RolePermissionFlagEntity[],
-    permissionFlagType: PermissionFlagType,
-  ): boolean {
-    const hasPermissionFromRole = role.canUpdateAllSettings;
-    const permissionFlagUniversalIdentifier =
-      SystemPermissionFlag[permissionFlagType];
-    const hasPermissionFromSettingPermissions = isDefined(
-      rolePermissionFlags.find(
-        (rolePermissionFlag) =>
-          this.getRolePermissionFlagUniversalIdentifier(rolePermissionFlag) ===
-          permissionFlagUniversalIdentifier,
-      ),
-    );
-
-    return hasPermissionFromRole || hasPermissionFromSettingPermissions;
-  }
-
   private getRolePermissionFlagUniversalIdentifier(
     rolePermissionFlag: RolePermissionFlagEntity,
   ): string {
-    // The `permissionFlag` relation is stripped during upgrades until the 2.6.0
-    // cursor (@WasIntroducedInUpgrade), so fall back to the legacy `flag` column.
+    // The permissionFlag relation is stripped until the 2.6.0 upgrade cursor, so fall back to the legacy flag column
     return (
       rolePermissionFlag.permissionFlag?.universalIdentifier ??
       SystemPermissionFlag[rolePermissionFlag.flag as PermissionFlagType]

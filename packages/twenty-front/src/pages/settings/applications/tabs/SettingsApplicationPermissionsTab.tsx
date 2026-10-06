@@ -1,4 +1,8 @@
-import { ObjectOpenRecordIn } from 'twenty-shared/types';
+import {
+  MetadataReadability,
+  ObjectOpenRecordIn,
+  ObjectSharingReach,
+} from 'twenty-shared/types';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { buildFieldMetadataItemFromMarketplaceField } from '@/settings/applications/utils/buildFieldMetadataItemFromMarketplaceField';
@@ -21,6 +25,7 @@ import {
 } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { MetadataWritability } from '~/generated-metadata/graphql';
 
 const SYSTEM_PERMISSION_FLAG_BY_UNIVERSAL_IDENTIFIER = Object.fromEntries(
   Object.entries(SystemPermissionFlag).map(([key, uuid]) => [
@@ -215,7 +220,10 @@ const buildObjectMetadataItemsFromMarketplaceApp = (
         isSearchable: false,
         isUIEditable: true,
         isUICreatable: true,
+        writability: MetadataWritability.OPEN,
         openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
+        sharingReach: ObjectSharingReach.WORKSPACE,
+        readability: MetadataReadability.OPEN,
         isLabelSyncedWithName: false,
         labelIdentifierFieldMetadataId: '',
         fields,

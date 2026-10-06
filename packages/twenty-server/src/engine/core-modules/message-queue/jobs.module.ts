@@ -3,6 +3,7 @@ import { ModuleRef } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { TypeORMModule } from 'src/database/typeorm/typeorm.module';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { BillingProductEntity } from 'src/engine/core-modules/billing/entities/billing-product.entity';
@@ -15,22 +16,29 @@ import { BillingReminderModule } from 'src/engine/core-modules/billing/reminders
 import { BillingReminderCronJob } from 'src/engine/core-modules/billing/reminders/crons/billing-reminder.cron.job';
 import { StripeModule } from 'src/engine/core-modules/billing/stripe/stripe.module';
 import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
+import { TriggerInstallApplicationJob } from 'src/engine/core-modules/application/application-install/jobs/trigger-install-application.job';
+import { TriggerUninstallApplicationJob } from 'src/engine/core-modules/application/application-install/jobs/trigger-uninstall-application.job';
 import { ApplicationManifestModule } from 'src/engine/core-modules/application/application-manifest/application-manifest.module';
+import { ApplicationRegistrationLookupModule } from 'src/engine/core-modules/application/application-registration/application-registration-lookup/application-registration-lookup.module';
 import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
 import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { UpgradeApplicationsJob } from 'src/engine/core-modules/application/jobs/upgrade-applications.job';
+import { UpgradeWorkspaceApplicationJob } from 'src/engine/core-modules/application/jobs/upgrade-workspace-application.job';
 import { InstallPreInstalledAppsJob } from 'src/engine/core-modules/application/pre-installed-apps/jobs/install-pre-installed-apps.job';
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
 import { InstallOnboardingAppsJob } from 'src/engine/core-modules/onboarding/jobs/install-onboarding-apps.job';
 import { OnboardingModule } from 'src/engine/core-modules/onboarding/onboarding.module';
 import { EmailSenderJob } from 'src/engine/core-modules/email/email-sender.job';
 import { EmailModule } from 'src/engine/core-modules/email/email.module';
+import { RecordExportModule } from 'src/engine/core-modules/record-export/record-export.module';
 import { EmailingModule } from 'src/modules/emailing/emailing.module';
 import { MaterializeCampaignChunkJob } from 'src/modules/emailing/jobs/materialize-campaign-chunk.job';
 import { MaterializeCampaignJob } from 'src/modules/emailing/jobs/materialize-campaign.job';
 import { ReconcileWorkspaceCampaignStatsJob } from 'src/modules/emailing/jobs/reconcile-workspace-campaign-stats.job';
 import { RefreshCampaignStatsJob } from 'src/modules/emailing/jobs/refresh-campaign-stats.job';
+import { SendCampaignEmailBatchJob } from 'src/modules/emailing/jobs/send-campaign-email-batch.job';
 import { SendCampaignEmailJob } from 'src/modules/emailing/jobs/send-campaign-email.job';
+import { SendScheduledCampaignJob } from 'src/modules/emailing/jobs/send-scheduled-campaign.job';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
 import { EventLogIngestionModule } from 'src/engine/core-modules/event-logs/ingest/event-log-ingestion.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
@@ -44,12 +52,17 @@ import { HandleWorkspaceMemberDeletedJob } from 'src/engine/core-modules/workspa
 import { WorkspaceDeletionApplicationUninstallJob } from 'src/engine/core-modules/workspace/jobs/workspace-deletion-application-uninstall.job';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
-import { AiAgentMonitorModule } from 'src/engine/metadata-modules/ai/ai-agent-monitor/ai-agent-monitor.module';
+import { AiAgentTriggerModule } from 'src/engine/metadata-modules/ai/ai-agent-trigger/ai-agent-trigger.module';
 import { AiChatModule } from 'src/engine/metadata-modules/ai/ai-chat/ai-chat.module';
+import { LogicFunctionPrebuiltWarmUpModule } from 'src/engine/core-modules/logic-function/logic-function-prebuilt-warm-up/logic-function-prebuilt-warm-up.module';
+import { WarmUpApplicationLogicFunctionsJob } from 'src/engine/core-modules/logic-function/logic-function-prebuilt-warm-up/jobs/warm-up-application-logic-functions.job';
 import { LogicFunctionModule } from 'src/engine/metadata-modules/logic-function/logic-function.module';
 import { NavigationMenuItemModule } from 'src/engine/metadata-modules/navigation-menu-item/navigation-menu-item.module';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 import { WebhookJobModule } from 'src/engine/metadata-modules/webhook/jobs/webhook-job.module';
+import { DeferredWorkspaceMigrationActionRecoveryCronJob } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/crons/jobs/deferred-workspace-migration-action-recovery.cron.job';
+import { RunDeferredWorkspaceMigrationActionsJob } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/jobs/run-deferred-workspace-migration-actions.job';
+import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
 import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
 import { CleanOnboardingWorkspacesJob } from 'src/engine/workspace-manager/workspace-cleaner/crons/clean-onboarding-workspaces.job';
 import { CleanSuspendedWorkspacesJob } from 'src/engine/workspace-manager/workspace-cleaner/crons/clean-suspended-workspaces.job';
@@ -72,6 +85,7 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
       BillingProductEntity,
     ]),
     ObjectMetadataModule,
+    RecordExportModule,
     TypeORMModule,
     UserModule,
     UserVarsModule,
@@ -93,21 +107,25 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     NavigationMenuItemModule,
     SdkClientModule,
     WorkspaceCleanerModule,
+    WorkspaceCacheModule,
     SubscriptionsModule,
     EventLogIngestionModule,
-    AiAgentMonitorModule,
+    AiAgentTriggerModule,
     AiChatModule,
     LogicFunctionModule,
+    LogicFunctionPrebuiltWarmUpModule,
     EnterpriseModule,
     EmailingModule,
     ApplicationInstallModule,
     ApplicationManifestModule,
+    ApplicationRegistrationLookupModule,
     ApplicationRegistrationModule,
     ApplicationUpgradeModule,
     PreInstalledAppsModule,
     OnboardingModule,
     BillingReminderModule,
     ApplicationRecurringChargeModule,
+    WorkspaceMigrationRunnerModule,
   ],
   providers: [
     ApplicationRecurringChargeCronJob,
@@ -116,8 +134,10 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     CleanOnboardingWorkspacesJob,
     EmailSenderJob,
     SendCampaignEmailJob,
+    SendCampaignEmailBatchJob,
     MaterializeCampaignJob,
     MaterializeCampaignChunkJob,
+    SendScheduledCampaignJob,
     RefreshCampaignStatsJob,
     ReconcileWorkspaceCampaignStatsJob,
     UpdateSubscriptionQuantityJob,
@@ -127,8 +147,14 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     UpdateWorkspaceMemberEmailJob,
     GenerateSdkClientJob,
     UpgradeApplicationsJob,
+    UpgradeWorkspaceApplicationJob,
     InstallOnboardingAppsJob,
     InstallPreInstalledAppsJob,
+    TriggerInstallApplicationJob,
+    TriggerUninstallApplicationJob,
+    WarmUpApplicationLogicFunctionsJob,
+    RunDeferredWorkspaceMigrationActionsJob,
+    DeferredWorkspaceMigrationActionRecoveryCronJob,
   ],
 })
 export class JobsModule {

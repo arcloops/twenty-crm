@@ -8,7 +8,11 @@ import {
 import {
   AggregateOperations,
   FieldMetadataType,
+  PageLayoutTabLayoutMode,
+  PageLayoutType,
+  PageLayoutWidgetVerticalListHeightBehavior,
   RelationType,
+  WidgetType,
 } from 'twenty-shared/types';
 import { manifestValidate } from '@/cli/utilities/build/manifest/manifest-validate';
 
@@ -33,6 +37,7 @@ const validField: FieldManifest = {
 const validManifest: Manifest = {
   commandMenuItems: [],
   timelineActivityTypes: [],
+  settingsMenuItems: [],
   application: validApplication,
   objects: [],
   frontComponents: [],
@@ -48,6 +53,7 @@ const validManifest: Manifest = {
   navigationMenuItems: [],
   pageLayouts: [],
   pageLayoutTabs: [],
+  pageLayoutWidgets: [],
 };
 
 describe('manifestValidate', () => {
@@ -438,23 +444,24 @@ describe('manifestValidate', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should pass with UUID v5 identifiers', () => {
-      const v5Field: FieldManifest = {
-        objectUniversalIdentifier: '20202020-b374-4779-a561-80086cb2e17f',
-        universalIdentifier: '21f7f8de-8051-5b89-8680-0195ef798b6a',
-        type: FieldMetadataType.TEXT,
-        name: 'v5Field',
-        label: 'V5 Field',
-      };
+    it.each([
+      '21f7f8de-8051-5b89-8680-0195ef798b6a',
+      'bbbbbbbb-bbbb-6bbb-8bbb-bbbbbbbbbbbb',
+      'bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb',
+      'bbbbbbbb-bbbb-8bbb-8bbb-bbbbbbbbbbbb',
+      'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    ])(
+      'should pass with supported universal identifier %s',
+      (universalIdentifier) => {
+        const result = manifestValidate({
+          ...validManifest,
+          fields: [{ ...validField, universalIdentifier }],
+        });
 
-      const result = manifestValidate({
-        ...validManifest,
-        fields: [v5Field],
-      });
-
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
+        expect(result.isValid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      },
+    );
 
     it('should fail with UUID v1 identifiers', () => {
       const v1Uuid = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
@@ -472,12 +479,9 @@ describe('manifestValidate', () => {
       });
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
-        expect.stringContaining(`"${v1Uuid}" is UUID version 1`),
-      );
-      expect(result.errors).toContainEqual(
-        expect.stringContaining('Only UUID version 4 or higher is allowed'),
-      );
+      expect(result.errors).toEqual([
+        `Invalid universal identifiers: Universal identifier "${v1Uuid}" is UUID version 1. Only UUID version 4 or higher is allowed.`,
+      ]);
     });
 
     it('should fail with UUID v3 identifiers', () => {
@@ -526,9 +530,9 @@ describe('manifestValidate', () => {
       });
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
-        expect.stringContaining('"not-a-uuid" is not a valid UUID'),
-      );
+      expect(result.errors).toEqual([
+        'Invalid universal identifiers: Universal identifier "not-a-uuid" is not a valid UUID.',
+      ]);
     });
 
     it('should not report duplicate version errors for the same identifier', () => {
@@ -573,7 +577,7 @@ describe('manifestValidate', () => {
         {
           universalIdentifier: 'b0a5f0f2-6c2e-4d1c-9d0b-2f8a4c3e1a02',
           title: 'Total opportunities',
-          type: 'GRAPH',
+          type: WidgetType.GRAPH,
           configuration,
         },
       ],
@@ -655,6 +659,188 @@ describe('manifestValidate', () => {
 
       expect(result.isValid).toBe(true);
     });
+  });
+
+  describe('page layout deprecation warnings', () => {
+    it.each(['nested', 'standalone'])(
+      'warns without changing a legacy %s manifest',
+      (location) => {
+        const legacyTab: PageLayoutTabManifest = {
+          universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000012',
+          title: 'Legacy canvas',
+          position: 0,
+          layoutMode: PageLayoutTabLayoutMode.CANVAS,
+          widgets: [],
+        };
+        const manifest: Manifest = {
+          ...validManifest,
+          pageLayouts:
+            location === 'nested'
+              ? [
+                  {
+                    universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000010',
+                    name: 'Record page',
+                    type: PageLayoutType.RECORD_PAGE,
+                    tabs: [legacyTab],
+                  },
+                ]
+              : [],
+          pageLayoutTabs: location === 'standalone' ? [legacyTab] : [],
+        };
+        const original = JSON.stringify(manifest);
+        const result = manifestValidate(manifest);
+
+        expect(result.isValid).toBe(true);
+        expect(result.warnings).toEqual([
+          expect.stringContaining('uses deprecated CANVAS'),
+        ]);
+        expect(result.warnings[0]).toContain(
+          "heightBehavior to 'TAB_VIEWPORT'",
+        );
+        expect(JSON.stringify(manifest)).toBe(original);
+      },
+    );
+
+    it.each(['position', 'gridPosition'])(
+      'warns about legacy %s with a replacement',
+      (positionKey) => {
+        const result = manifestValidate({
+          ...validManifest,
+          pageLayoutTabs: [
+            {
+              universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000012',
+              title: 'Details',
+              position: 0,
+              layoutMode:
+                positionKey === 'position'
+                  ? PageLayoutTabLayoutMode.VERTICAL_LIST
+                  : PageLayoutTabLayoutMode.GRID,
+              widgets: [
+                {
+                  universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000013',
+                  title: 'Timeline',
+                  type: WidgetType.TIMELINE,
+                  configuration: { configurationType: 'TIMELINE' },
+                  [positionKey]:
+                    positionKey === 'position'
+                      ? {
+                          layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+                          index: 99,
+                        }
+                      : { row: 2, column: 3, rowSpan: 4, columnSpan: 5 },
+                },
+              ],
+            },
+          ],
+        });
+
+        expect(result.isValid).toBe(true);
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings[0]).toContain(
+          positionKey === 'position'
+            ? 'Order the widgets array by position.index'
+            : "Use position with layoutMode: 'GRID'",
+        );
+      },
+    );
+  });
+
+  describe('page layout widget height behavior validation', () => {
+    const makePageLayout = (
+      layoutMode: PageLayoutTabLayoutMode,
+    ): Manifest['pageLayouts'][number] => ({
+      universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000010',
+      name: 'Record page',
+      type: PageLayoutType.RECORD_PAGE,
+      objectUniversalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000011',
+      tabs: [
+        {
+          universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000012',
+          title: 'Details',
+          position: 0,
+          layoutMode,
+          widgets: [
+            {
+              universalIdentifier: 'a0a1a2a3-a4a5-4000-8000-000000000013',
+              title: 'App',
+              type: WidgetType.FRONT_COMPONENT,
+              heightBehavior: PageLayoutWidgetVerticalListHeightBehavior.TAB_VIEWPORT,
+              configuration: {
+                configurationType: 'FRONT_COMPONENT',
+                frontComponentUniversalIdentifier:
+                  'a0a1a2a3-a4a5-4000-8000-000000000014',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    it('should accept heightBehavior on a VERTICAL_LIST tab', () => {
+      const result = manifestValidate({
+        ...validManifest,
+        pageLayouts: [makePageLayout(PageLayoutTabLayoutMode.VERTICAL_LIST)],
+      });
+
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it.each(['nested', 'standalone'])(
+      'rejects invalid heightBehavior in a %s tab',
+      (location) => {
+        const pageLayout = makePageLayout(
+          PageLayoutTabLayoutMode.VERTICAL_LIST,
+        );
+        const pageLayoutTab = {
+          ...pageLayout.tabs![0],
+          widgets: pageLayout.tabs![0].widgets!.map((widget) => ({
+            ...widget,
+            heightBehavior: 'TAB_VIEPORT',
+          })),
+        };
+        const manifest: Manifest = JSON.parse(
+          JSON.stringify({
+            ...validManifest,
+            pageLayouts: [
+              {
+                ...pageLayout,
+                tabs: location === 'nested' ? [pageLayoutTab] : [],
+              },
+            ],
+            pageLayoutTabs:
+              location === 'standalone'
+                ? [
+                    {
+                      ...pageLayoutTab,
+                      pageLayoutUniversalIdentifier:
+                        pageLayout.universalIdentifier,
+                    },
+                  ]
+                : [],
+          }),
+        );
+
+        const result = manifestValidate(manifest);
+        expect(result.isValid).toBe(false);
+        expect(result.errors).toContain(
+          'Page layout widget "App" defines unsupported heightBehavior "TAB_VIEPORT". Expected FIT_CONTENT or TAB_VIEWPORT.',
+        );
+      },
+    );
+
+    it.each([PageLayoutTabLayoutMode.GRID, PageLayoutTabLayoutMode.CANVAS])(
+      'should reject heightBehavior on a %s tab',
+      (layoutMode) => {
+        const result = manifestValidate({
+          ...validManifest,
+          pageLayouts: [makePageLayout(layoutMode)],
+        });
+
+        expect(result.errors).toContain(
+          `Page layout widget "App" defines heightBehavior, but its parent tab "Details" uses ${layoutMode}. heightBehavior is only supported for VERTICAL_LIST tabs.`,
+        );
+      },
+    );
   });
 
   describe('timeline activity type validation', () => {
@@ -782,6 +968,32 @@ describe('manifestValidate', () => {
 
       expect(manifestValidate(manifest).errors).toHaveLength(0);
     });
+
+    it.each([
+      'bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb',
+      'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    ])(
+      'accepts supported external timeline reference %s',
+      (universalIdentifier) => {
+        const manifest = buildTimelineManifest();
+        const [timelineActivityType] = manifest.timelineActivityTypes;
+
+        timelineActivityType.emit!.objectUniversalIdentifier =
+          universalIdentifier;
+        timelineActivityType.replacesTimelineActivityTypeUniversalIdentifier =
+          universalIdentifier;
+        timelineActivityType.emit!.through!.relationFieldUniversalIdentifier =
+          universalIdentifier;
+        timelineActivityType.emit!.through!.triggerFieldUniversalIdentifiers = [
+          universalIdentifier,
+        ];
+
+        const result = manifestValidate(manifest);
+
+        expect(result.isValid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      },
+    );
 
     it('validates external-object route identifiers without resolving their metadata', () => {
       const manifest = buildTimelineManifest();

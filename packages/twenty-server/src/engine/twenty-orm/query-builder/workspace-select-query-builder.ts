@@ -1,6 +1,7 @@
 import { type ObjectsPermissions } from 'twenty-shared/types';
 import { isDefined, pascalCase } from 'twenty-shared/utils';
-import { FindOperator, type ObjectLiteral } from 'typeorm';
+import { type ObjectLiteral } from 'typeorm';
+import { InstanceChecker } from 'typeorm/util/InstanceChecker';
 
 import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfaces/relation-type.interface';
 
@@ -33,7 +34,7 @@ import {
   buildSelectStatement,
   buildWhereExpression,
   collectStatementAliases,
-  mapRowToEntity,
+  createRowToEntityMapper,
   normaliseColumnExpression,
   quoteColumn,
   quoteQualifiedAliasReferences,
@@ -46,7 +47,10 @@ import {
   type SelectStatementState,
   type WhereClause,
 } from 'src/engine/twenty-orm/sql/utils/build-select-statement.util';
-import { type WorkspaceTableShape } from 'src/engine/twenty-orm/table-shape/types/workspace-table-shape.type';
+import {
+  type WorkspaceRelationShape,
+  type WorkspaceTableShape,
+} from 'src/engine/twenty-orm/table-shape/types/workspace-table-shape.type';
 import { escapeIdentifier } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 
 let objectWhereParameterSequence = 0;
@@ -56,13 +60,14 @@ const isNestedWhereObject = (value: unknown): value is ObjectWhereLike =>
   isDefined(value) &&
   typeof value === 'object' &&
   !Array.isArray(value) &&
-  !(value instanceof FindOperator) &&
+  !InstanceChecker.isFindOperator(value) &&
   !(value instanceof Date);
 
 export type QueryBuilderContext = {
   tableShape: WorkspaceTableShape;
   executor: QueryExecutor;
   objectRecordsPermissions: ObjectsPermissions;
+  isRecordSharingEnabled?: boolean;
   tableShapeByObjectMetadataId: (
     objectMetadataId: string,
   ) => WorkspaceTableShape;
@@ -74,9 +79,11 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
   readonly alias: string;
   readonly tableShape: WorkspaceTableShape;
   readonly objectRecordsPermissions: ObjectsPermissions;
+  readonly isRecordSharingEnabled: boolean;
 
   private readonly context: QueryBuilderContext;
   private readonly whereClauses: WhereClause[] = [];
+  private readonly rowAccessConditions: string[] = [];
   private readonly joinClauses: JoinClause[] = [];
   private readonly existsFilterClauses: ExistsFilterClause[] = [];
   private readonly extraSelectClauses: SelectClause[] = [];
@@ -96,6 +103,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     this.alias = alias;
     this.tableShape = context.tableShape;
     this.objectRecordsPermissions = context.objectRecordsPermissions;
+    this.isRecordSharingEnabled = context.isRecordSharingEnabled ?? false;
     this.context = context;
   }
 
@@ -112,10 +120,14 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     ];
   }
 
-  clone(): WorkspaceSelectQueryBuilder {
-    const cloned = new WorkspaceSelectQueryBuilder(this.alias, this.context);
+  clone(executor?: QueryExecutor): WorkspaceSelectQueryBuilder {
+    const cloned = new WorkspaceSelectQueryBuilder(
+      this.alias,
+      isDefined(executor) ? { ...this.context, executor } : this.context,
+    );
 
     cloned.whereClauses.push(...this.whereClauses);
+    cloned.rowAccessConditions.push(...this.rowAccessConditions);
     cloned.existsFilterClauses.push(
       ...this.existsFilterClauses.map((existsFilterClause) => ({
         ...existsFilterClause,
@@ -155,13 +167,13 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     parameters?: Record<string, unknown>,
   ): this {
     this.whereClauses.length = 0;
-    this.aliasesWithRowLevelPermissionApplied.delete(this.alias);
 
     return this.appendWhere('and', condition, parameters);
   }
 
   copyWhereFrom(source: WorkspaceSelectQueryBuilder): this {
     this.whereClauses.push(...source.whereClauses);
+    this.rowAccessConditions.push(...source.rowAccessConditions);
     this.existsFilterClauses.push(
       ...source.existsFilterClauses.map((existsFilterClause) => ({
         ...existsFilterClause,
@@ -185,6 +197,21 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     parameters?: Record<string, unknown>,
   ): this {
     return this.appendWhere('or', condition, parameters);
+  }
+
+  addRowAccessCondition(
+    condition: string,
+    parameters?: Record<string, unknown>,
+  ): this {
+    if (isDefined(parameters)) {
+      this.setParameters(parameters);
+    }
+
+    if (condition.length > 0) {
+      this.rowAccessConditions.push(condition);
+    }
+
+    return this;
   }
 
   setParameters(parameters: Record<string, unknown>): this {
@@ -555,7 +582,9 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
   ): T[] {
     const columnNameByResultAlias = this.buildColumnNameByResultAlias();
 
-    return rows.map((row) => mapRowToEntity<T>(row, columnNameByResultAlias));
+    const mapRowToEntity = createRowToEntityMapper<T>(columnNameByResultAlias);
+
+    return rows.map(mapRowToEntity);
   }
 
   async getMany<T extends ObjectLiteral>(options?: {
@@ -676,6 +705,23 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     );
   }
 
+  getJoinParentRelationShape(
+    alias: string,
+  ): WorkspaceRelationShape | undefined {
+    const clause =
+      this.joinClauses.find((joinClause) => joinClause.alias === alias) ??
+      this.existsFilterClauses.find(
+        (existsFilterClause) => existsFilterClause.alias === alias,
+      );
+
+    if (!isDefined(clause)) {
+      return undefined;
+    }
+
+    return this.getTableShapeForAlias(clause.parentAlias)
+      ?.relationShapeByFieldName[clause.relationFieldName];
+  }
+
   markRowLevelPermissionApplied(alias: string): boolean {
     if (this.aliasesWithRowLevelPermissionApplied.has(alias)) {
       return false;
@@ -724,35 +770,20 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     return this.getReferencedColumnNamesByAlias()[this.alias] ?? [];
   }
 
-  update(): WorkspaceMutationQueryBuilder {
-    return this.toMutationQueryBuilder('update');
-  }
-
-  delete(): WorkspaceMutationQueryBuilder {
-    return this.toMutationQueryBuilder('delete');
-  }
-
-  softDelete(): WorkspaceMutationQueryBuilder {
-    return this.toMutationQueryBuilder('soft-delete');
-  }
-
-  restore(): WorkspaceMutationQueryBuilder {
-    return this.toMutationQueryBuilder('restore');
-  }
-
-  private toMutationQueryBuilder(
+  // Not an instance method, so builders from createQueryBuilder expose no write that skips the repository checks
+  static toMutationQueryBuilder(
+    selectQueryBuilder: WorkspaceSelectQueryBuilder,
     kind: MutationKind,
   ): WorkspaceMutationQueryBuilder {
-    if (this.joinClauses.length > 0) {
+    if (selectQueryBuilder.joinClauses.length > 0) {
       throw new TwentyOrmException(
         `A mutation cannot carry a relation join; rewrite the filter as an "id IN (subquery)" predicate first`,
         TwentyOrmExceptionCode.UNSUPPORTED_OPERATION,
       );
     }
 
-    // Row-level permission predicates are injected on the select path only, so an
-    // EXISTS rendered here would filter the related table with no predicate at all.
-    if (this.existsFilterClauses.length > 0) {
+    // Row-level permission predicates are injected on the select path only, so an EXISTS here would be unfiltered
+    if (selectQueryBuilder.existsFilterClauses.length > 0) {
       throw new TwentyOrmException(
         `A mutation cannot carry a relation filter; rewrite the filter as an "id IN (subquery)" predicate first`,
         TwentyOrmExceptionCode.UNSUPPORTED_OPERATION,
@@ -760,15 +791,17 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     }
 
     return new WorkspaceMutationQueryBuilder({
-      alias: this.alias,
+      alias: selectQueryBuilder.alias,
       kind,
       context: {
-        tableShape: this.tableShape,
-        executor: this.context.executor,
-        formatResult: this.context.formatResult,
+        tableShape: selectQueryBuilder.tableShape,
+        executor: selectQueryBuilder.context.executor,
+        formatResult: selectQueryBuilder.context.formatResult,
       },
-      whereClauses: this.whereClauses,
-      parameters: this.parameters,
+      whereClauses: selectQueryBuilder.whereClauses,
+      rowAccessConditions: selectQueryBuilder.rowAccessConditions,
+      includeDeleted: selectQueryBuilder.includeDeleted,
+      parameters: selectQueryBuilder.parameters,
     });
   }
 
@@ -822,6 +855,14 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
       return this;
     }
 
+    // Dropping an unreadable condition would widen the query, or make a delete hit every row
+    if (typeof condition !== 'string') {
+      throw new TwentyOrmException(
+        'A where condition must be a SQL string, a where object or a where factory',
+        TwentyOrmExceptionCode.INVALID_QUERY,
+      );
+    }
+
     if (condition.length > 0) {
       this.whereClauses.push({ operator, sql: `(${condition})` });
     }
@@ -858,7 +899,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
           this.buildRelationExistsCondition({
             relationFieldName: columnName,
             relationShape,
-            where: value,
+            applyWhere: (nestedBuilder) => nestedBuilder.where(value),
             parameters,
           }),
         );
@@ -874,7 +915,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
         hasCompositeChildColumns &&
         isDefined(value) &&
         typeof value === 'object' &&
-        !(value instanceof FindOperator) &&
+        !InstanceChecker.isFindOperator(value) &&
         !Array.isArray(value)
       ) {
         for (const [subFieldName, subValue] of Object.entries(
@@ -915,15 +956,47 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
     return { sql: conditions.join(' AND '), parameters };
   }
 
+  // EXISTS rather than a join so filtering a to-many relation never duplicates root rows
+  addRelationExistsFilter({
+    relationFieldName,
+    applyWhere,
+  }: {
+    relationFieldName: string;
+    applyWhere: (nestedBuilder: WorkspaceSelectQueryBuilder) => void;
+  }): string {
+    const relationShape =
+      this.tableShape.relationShapeByFieldName[relationFieldName];
+
+    if (!isDefined(relationShape)) {
+      throw new TwentyOrmException(
+        `Unknown relation "${relationFieldName}" on "${this.tableShape.nameSingular}"`,
+        TwentyOrmExceptionCode.UNKNOWN_RELATION,
+      );
+    }
+
+    const parameters: Record<string, unknown> = {};
+
+    const token = this.buildRelationExistsCondition({
+      relationFieldName,
+      relationShape,
+      applyWhere,
+      parameters,
+    });
+
+    this.setParameters(parameters);
+
+    return token;
+  }
+
   private buildRelationExistsCondition({
     relationFieldName,
     relationShape,
-    where,
+    applyWhere,
     parameters,
   }: {
     relationFieldName: string;
     relationShape: WorkspaceTableShape['relationShapeByFieldName'][string];
-    where: ObjectWhereLike;
+    applyWhere: (nestedBuilder: WorkspaceSelectQueryBuilder) => void;
     parameters: Record<string, unknown>;
   }): string {
     const targetTableShape = this.context.tableShapeByObjectMetadataId(
@@ -953,7 +1026,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
       tableShape: targetTableShape,
     });
 
-    nestedBuilder.where(where);
+    applyWhere(nestedBuilder);
 
     Object.assign(parameters, nestedBuilder.parameters);
 
@@ -1021,7 +1094,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
       return parameterName;
     };
 
-    if (value instanceof FindOperator) {
+    if (InstanceChecker.isFindOperator(value)) {
       switch (value.type) {
         case 'in':
           return `${quotedColumn} IN (:...${nextParameter(value.value)})`;
@@ -1199,6 +1272,7 @@ export class WorkspaceSelectQueryBuilder implements WhereExpressionLike {
       columnSelections: this.resolveColumnSelections(),
       joinClauses: this.joinClauses,
       whereClauses: this.whereClauses,
+      rowAccessConditions: this.rowAccessConditions,
       existsFilterClauses: this.existsFilterClauses,
       groupByExpressions: this.groupByExpressions,
       orderByClauses: this.orderByClauses,

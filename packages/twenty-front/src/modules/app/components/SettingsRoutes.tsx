@@ -37,8 +37,7 @@ const SettingsRestPlayground = lazy(() =>
   ),
 );
 
-// TODO: remove these legacy /api-webhooks redirects after 2026-08-04, once
-// users have had time to update their bookmarks to the new API settings routes.
+// TODO: remove these legacy /api-webhooks redirects after 2026-08-04.
 const LEGACY_API_WEBHOOKS_SETTINGS_PATHS = {
   ApiWebhooks: 'api-webhooks',
   NewApiKey: 'api-webhooks/apis/new',
@@ -360,18 +359,6 @@ const SettingsApplicationRegistrationDetails = lazy(() =>
   ),
 );
 
-const SettingsAgentForm = lazy(() =>
-  import('~/pages/settings/ai/SettingsAgentForm').then((module) => ({
-    default: module.SettingsAgentForm,
-  })),
-);
-
-const SettingsAgentTurnDetail = lazy(() =>
-  import('~/pages/settings/ai/SettingsAgentTurnDetail').then((module) => ({
-    default: module.SettingsAgentTurnDetail,
-  })),
-);
-
 const SettingsSkillForm = lazy(() =>
   import('~/pages/settings/ai/SettingsSkillForm').then((module) => ({
     default: module.SettingsSkillForm,
@@ -458,6 +445,26 @@ const SettingsUsage = lazy(() =>
   })),
 );
 
+const SettingsBillingLimits = lazy(() =>
+  import('~/pages/settings/billing/SettingsBillingLimits').then((module) => ({
+    default: module.SettingsBillingLimits,
+  })),
+);
+
+const SettingsBillingNewLimit = lazy(() =>
+  import('~/pages/settings/billing/SettingsBillingNewLimit').then((module) => ({
+    default: module.SettingsBillingNewLimit,
+  })),
+);
+
+const SettingsBillingLimitEdit = lazy(() =>
+  import('~/pages/settings/billing/SettingsBillingLimitEdit').then(
+    (module) => ({
+      default: module.SettingsBillingLimitEdit,
+    }),
+  ),
+);
+
 const SettingsUsageUserDetail = lazy(() =>
   import('~/pages/settings/billing/SettingsUsageUserDetail').then((module) => ({
     default: module.SettingsUsageUserDetail,
@@ -510,10 +517,34 @@ const SettingsObjectNewIndex = lazy(() =>
   ),
 );
 
+const SettingsObjectNewValidationRule = lazy(() =>
+  import('~/pages/settings/data-model/validation-rules/SettingsObjectNewValidationRule').then(
+    (module) => ({
+      default: module.SettingsObjectNewValidationRule,
+    }),
+  ),
+);
+
+const SettingsObjectValidationRuleEdit = lazy(() =>
+  import('~/pages/settings/data-model/validation-rules/SettingsObjectValidationRuleEdit').then(
+    (module) => ({
+      default: module.SettingsObjectValidationRuleEdit,
+    }),
+  ),
+);
+
 const SettingsObjectFieldEdit = lazy(() =>
   import('~/pages/settings/data-model/SettingsObjectFieldEdit').then(
     (module) => ({
       default: module.SettingsObjectFieldEdit,
+    }),
+  ),
+);
+
+const SettingsObjectTranslations = lazy(() =>
+  import('~/pages/settings/data-model/SettingsObjectTranslations').then(
+    (module) => ({
+      default: module.SettingsObjectTranslations,
     }),
   ),
 );
@@ -788,6 +819,18 @@ const createSettingsRouteElements = ({
         element={<SettingsUsageUserDetail />}
       />
       <Route
+        path={SettingsPath.BillingLimits}
+        element={<SettingsBillingLimits />}
+      />
+      <Route
+        path={SettingsPath.BillingNewLimit}
+        element={<SettingsBillingNewLimit />}
+      />
+      <Route
+        path={SettingsPath.BillingLimitEdit}
+        element={<SettingsBillingLimitEdit />}
+      />
+      <Route
         path={SettingsPath.Subdomain}
         element={<SettingsSubdomainPage />}
       />
@@ -796,7 +839,11 @@ const createSettingsRouteElements = ({
         element={<SettingsCustomDomainPage />}
       />
       <Route
-        path={SettingsPath.PublicDomain}
+        path={SettingsPath.ApplicationPublicDomainNew}
+        element={<SettingPublicDomain />}
+      />
+      <Route
+        path={SettingsPath.ApplicationPublicDomainDetail}
         element={<SettingPublicDomain />}
       />
       <Route path={SettingsPath.LegalDpa} element={<SettingsLegalDpa />} />
@@ -814,18 +861,6 @@ const createSettingsRouteElements = ({
     >
       <Route path={SettingsPath.AI} element={<SettingsAI />} />
       <Route path={SettingsPath.AiPrompts} element={<SettingsAiPrompts />} />
-      <Route
-        path={SettingsPath.AiNewAgent}
-        element={<SettingsAgentForm mode="create" />}
-      />
-      <Route
-        path={SettingsPath.AiAgentDetail}
-        element={<SettingsAgentForm mode="edit" />}
-      />
-      <Route
-        path={SettingsPath.AiAgentTurnDetail}
-        element={<SettingsAgentTurnDetail />}
-      />
       <Route
         path={SettingsPath.AiNewSkill}
         element={<SettingsSkillForm mode="create" />}
@@ -916,8 +951,28 @@ const createSettingsRouteElements = ({
         handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
       />
       <Route
+        path={SettingsPath.ObjectNewValidationRule}
+        element={<SettingsObjectNewValidationRule />}
+        handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
+      />
+      <Route
+        path={SettingsPath.ObjectValidationRuleEdit}
+        element={<SettingsObjectValidationRuleEdit />}
+        handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
+      />
+      <Route
         path={SettingsPath.ObjectFieldEdit}
         element={<SettingsObjectFieldEdit />}
+        handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
+      />
+      <Route
+        path={SettingsPath.ObjectTranslations}
+        element={<SettingsObjectTranslations />}
+        handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
+      />
+      <Route
+        path={SettingsPath.ObjectFieldTranslations}
+        element={<SettingsObjectTranslations />}
         handle={MAIN_AND_SIDE_PANEL_SETTINGS_ROUTE_HANDLE}
       />
     </Route>
@@ -1098,7 +1153,7 @@ const createSettingsRouteElements = ({
           path={SettingsPath.Enterprise}
           element={
             <Navigate
-              to={getSettingsPath(SettingsPath.AdminPanelEnterprise)}
+              to={getSettingsPath(SettingsPath.AdminPanelOrganization)}
               replace
             />
           }

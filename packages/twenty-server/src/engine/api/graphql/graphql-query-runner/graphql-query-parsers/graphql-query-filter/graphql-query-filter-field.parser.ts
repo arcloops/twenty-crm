@@ -10,6 +10,7 @@ import {
   GraphqlQueryRunnerExceptionCode,
 } from 'src/engine/api/graphql/graphql-query-runner/errors/graphql-query-runner.exception';
 import { addRelationJoinAliasToQueryBuilder } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/add-relation-join-alias.util';
+import { isRecordGrantBeyondRoleAllowed } from 'src/engine/core-modules/record-share/utils/is-record-grant-beyond-role-allowed.util';
 import { assertFieldIsReadableOrThrow } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/assert-field-is-readable-or-throw.util';
 import { resolveFilterKeyFieldMetadata } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/utils/resolve-filter-key-field-metadata.util';
 import { assertArrayOperatorValueIsNonEmptyArray } from 'src/engine/api/graphql/graphql-query-runner/utils/assert-array-operator-value-is-non-empty-array.util';
@@ -84,7 +85,19 @@ export class GraphqlQueryFilterFieldParser {
     const objectPermissions =
       outerQueryBuilder.objectRecordsPermissions[this.flatObjectMetadata.id];
 
-    if (objectPermissions?.canReadObjectRecords === false) {
+    // Filtering the queried object itself stays possible on records shared by
+    // name, while a filter through a relation still needs the object readable
+    if (
+      objectPermissions?.canReadObjectRecords === false &&
+      !(
+        this.depth === 0 &&
+        isRecordGrantBeyondRoleAllowed({
+          flatObjectMetadata: this.flatObjectMetadata,
+          operationType: 'select',
+          isRecordSharingEnabled: outerQueryBuilder.isRecordSharingEnabled,
+        })
+      )
+    ) {
       throw new PermissionsException(
         PermissionsExceptionMessage.PERMISSION_DENIED,
         PermissionsExceptionCode.PERMISSION_DENIED,
@@ -100,16 +113,19 @@ export class GraphqlQueryFilterFieldParser {
     if (
       isReferencedByFieldName &&
       isMorphOrRelationFlatFieldMetadata(fieldMetadata) &&
-      fieldMetadata.settings?.relationType === RelationType.MANY_TO_ONE
+      (fieldMetadata.settings?.relationType === RelationType.MANY_TO_ONE ||
+        fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
     ) {
-      return this.parseRelationSubFilter(
+      return this.parseRelationSubFilter({
         queryBuilder,
         outerQueryBuilder,
-        objectNameSingular,
+        parentAlias: objectNameSingular,
         fieldMetadata,
         filterValue,
         isFirst,
-      );
+        isToManyRelation:
+          fieldMetadata.settings.relationType === RelationType.ONE_TO_MANY,
+      });
     }
 
     if (isCompositeFieldMetadataType(fieldMetadata.type)) {
@@ -142,14 +158,23 @@ export class GraphqlQueryFilterFieldParser {
     }
   }
 
-  private parseRelationSubFilter(
-    queryBuilder: WhereExpressionBuilder,
-    outerQueryBuilder: WorkspaceSelectQueryBuilder,
-    parentAlias: string,
-    fieldMetadata: OrmFlatFieldMetadata,
-    filterValue: Partial<ObjectRecordFilter>,
-    isFirst: boolean,
-  ): void {
+  private parseRelationSubFilter({
+    queryBuilder,
+    outerQueryBuilder,
+    parentAlias,
+    fieldMetadata,
+    filterValue,
+    isFirst,
+    isToManyRelation,
+  }: {
+    queryBuilder: WhereExpressionBuilder;
+    outerQueryBuilder: WorkspaceSelectQueryBuilder;
+    parentAlias: string;
+    fieldMetadata: OrmFlatFieldMetadata;
+    filterValue: Partial<ObjectRecordFilter>;
+    isFirst: boolean;
+    isToManyRelation: boolean;
+  }): void {
     if (this.depth >= MAX_RELATION_FILTER_DEPTH) {
       throw new GraphqlQueryRunnerException(
         `Relation filter nesting deeper than ${MAX_RELATION_FILTER_DEPTH} hop is not supported`,
@@ -190,6 +215,51 @@ export class GraphqlQueryFilterFieldParser {
       );
     }
 
+    const childConditionParser = new GraphqlQueryFilterConditionParser(
+      targetObjectMetadata,
+      this.flatFieldMetadataMaps,
+      this.flatObjectMetadataMaps,
+      this.depth + 1,
+    );
+
+    // A to-many join would duplicate root rows, which the find-many runner rejects, so match through a correlated EXISTS
+    if (isToManyRelation) {
+      // The EXISTS is correlated with the root alias, so through a joined to-one it would match the wrong rows
+      if (parentAlias !== outerQueryBuilder.alias) {
+        throw new GraphqlQueryRunnerException(
+          `To-many relation filter on "${fieldMetadata.name}" must apply to the root object`,
+          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+          {
+            userFriendlyMessage: msg`Relation filters can only traverse one relation deep`,
+          },
+        );
+      }
+
+      const existsToken = outerQueryBuilder.addRelationExistsFilter({
+        relationFieldName: fieldMetadata.name,
+        applyWhere: (nestedQueryBuilder) => {
+          nestedQueryBuilder.where(
+            new Brackets((subQb) => {
+              childConditionParser.applyFilterEntriesToWhereBrackets(
+                subQb,
+                nestedQueryBuilder,
+                nestedQueryBuilder.alias,
+                filterValue,
+              );
+            }),
+          );
+        },
+      });
+
+      if (isFirst) {
+        queryBuilder.where(existsToken);
+      } else {
+        queryBuilder.andWhere(existsToken);
+      }
+
+      return;
+    }
+
     const joinAlias = fieldMetadata.name;
 
     addRelationJoinAliasToQueryBuilder({
@@ -197,13 +267,6 @@ export class GraphqlQueryFilterFieldParser {
       parentAlias,
       relationName: joinAlias,
     });
-
-    const childConditionParser = new GraphqlQueryFilterConditionParser(
-      targetObjectMetadata,
-      this.flatFieldMetadataMaps,
-      this.flatObjectMetadataMaps,
-      this.depth + 1,
-    );
 
     const subBrackets = new Brackets((subQb) => {
       childConditionParser.applyFilterEntriesToWhereBrackets(

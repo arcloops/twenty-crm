@@ -63,6 +63,7 @@ there, since Slack validates the set:
 | `users:read` | list the Slack roster for the email sweep, and look up a requester's display name |
 | `users:read.email` | match a Slack account to a workspace member by confirmed email |
 | `assistant:write` | agent surface: `assistant.threads.*` (statuses, titles, suggested prompts) |
+| `files:read` | assistant: download files shared with a request so the agent can read them |
 
 Adding or removing scopes later means existing installs must re-authorize:
 disconnect and **Add connection** again.
@@ -161,7 +162,13 @@ mentions and DMs, at the cost of un-mentioned thread follow-ups.
 > `entity_details_requested` plus the `links:read` / `links:write` scopes for the
 > record link previews; that one does need a reconnect, and on an app created
 > from an older manifest the Work Object Previews toggle has to be enabled by
-> hand as well (see Record link previews).
+> hand as well (see Record link previews). Upgrading from any version before
+> 0.9.0 adds the `slack#/entities/task` entity type, which has to be selected
+> under Work Object Previews by hand; until it is, task links stop rendering a
+> card at all. No new scopes or events, so no reconnect. Upgrading from any
+> version before 1.4.0 adds the `files:read` scope so the assistant can read
+> files shared with it; that needs a reconnect, and until then shared files
+> reach the assistant as names only, exactly as they did before. No new events.
 
 ### Interactivity
 
@@ -189,6 +196,32 @@ Where a Slack account is linked to a workspace member, the bot also runs with
 that member's own permissions, so it can never do more than the person asking.
 Accounts with no link act with the Slack Assistant role alone, so keep it scoped
 to what you're comfortable exposing to anyone who can message the bot.
+
+### Channel rules
+
+The **Channels** section of the app's **Settings** tab lets a member with the
+roles permission override the workspace access mode for individual channels.
+Each rule names one channel and one mode:
+
+- **Open to anyone**: the assistant answers everyone there, even when the
+  workspace access mode is restricted to linked members.
+- **Linked members only**: only Slack accounts linked to a workspace member get
+  an answer there. Anyone else is told, in the thread, to ask an admin to link
+  them.
+- **Silent**: the assistant ignores the channel. Mentions, thread follow-ups and
+  empty mentions are dropped before anything visible happens in Slack, and no
+  Slack Assistant Request is recorded.
+
+A channel without a rule follows the workspace access mode. Direct messages
+never carry a rule: the requester is the only person there, so the workspace
+mode applies. Rules are keyed on the Slack channel id, so renaming a channel
+does not affect them. Slack confirms the channel when a rule is saved, so a rule
+can only target a channel or private group, never a direct message.
+
+Rules restrict who the assistant answers, not what it can do. A linked member
+who is allowed in a channel still acts with their own permissions, and an
+unlinked account still acts with the Slack Assistant role. Each rule is stored
+as a **Slack Channel Rule** record that only the app can write.
 
 ## Linking Slack accounts to workspace members
 
@@ -305,11 +338,15 @@ On an existing install, add them and reconnect (disconnect, then **Add
 connection** again) so the token picks up the scopes.
 
 The manifest turns the previews themselves on, through `features.rich_previews`
-with the `slack#/entities/item` entity type they use. On an app created by hand,
-or from a manifest older than 0.7.0, open **Work Object Previews** in the app
-settings, enable the toggle and select the **Item** entity type. Without it Slack
-ignores the unfurl metadata and no card ever renders, with nothing in the logs to
-say why.
+with the two entity types they use: `slack#/entities/item` for people,
+companies, opportunities and notes, and `slack#/entities/task` for tasks, which
+Slack renders with native status, due date and assignee fields. On an app
+created by hand, or from a manifest older than 0.7.0, open **Work Object
+Previews** in the app settings, enable the toggle and select both the **Item**
+and **Task** entity types. An app created from a 0.7.x or 0.8.x manifest already
+has the toggle on with **Item** selected, so it only needs **Task** added. A
+type you leave unselected makes Slack ignore the unfurl metadata for those
+records, so no card renders and nothing in the logs says why.
 
 Slack stamps your Slack app's icon on the corner of every record card for
 attribution, and an app without one gets Slack's generic placeholder. Upload the
@@ -346,7 +383,7 @@ configured.
 - **Answer feedback.** Short answers end with Slack's native thumbs up / thumbs
   down buttons. A click stores a Positive or Negative rating on the matching
   Slack Assistant Request record (last click wins). Very long answers fall back
-  to a plain markdown message without buttons.
+  to a plain message without buttons.
 - **Thread memory.** After a successful reply the bot stays active in that
   thread, so follow-ups need no mention. Channel threads stay active for 24
   hours after the last reply (each reply renews it); DM threads never expire.
@@ -355,10 +392,11 @@ configured.
   gets an ephemeral nudge (only that member sees it) to mention the bot again.
 - **Channel welcome.** With `member_joined_channel` subscribed, the bot posts a
   short introduction the first time it is added to a channel, with the details
-  in a thread reply so the channel itself stays quiet. It fires once per channel
-  for 30 days, and only for the bot's own join — humans joining afterwards
-  trigger nothing. Skip the subscription if you would rather it arrived
-  silently.
+  in a thread reply so the channel itself stays quiet. It names both ways to
+  reach the bot: mention it in the channel, or DM it to keep a question and its
+  answer out of the channel. It fires once per channel for 30 days, and only for
+  the bot's own join — humans joining afterwards trigger nothing. Skip the
+  subscription if you would rather it arrived silently.
 - **One Slack workspace per Twenty workspace.** Connecting Slack claims that
   Slack team for the connecting Twenty workspace, and on the same server a
   second Twenty workspace connecting the same team is rejected. Removing the last

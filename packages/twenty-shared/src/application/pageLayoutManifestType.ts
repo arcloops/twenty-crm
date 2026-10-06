@@ -5,16 +5,23 @@ import {
   type PageLayoutWidgetConditionalDisplay,
   type PageLayoutWidgetPosition,
   type PageLayoutWidgetUniversalConfiguration,
+  type PageLayoutWidgetVerticalListHeightBehavior,
   type WidgetType,
 } from '@/types';
 
 export type PageLayoutWidgetManifest = SyncableEntityOptions & {
   title: string;
-  type: `${WidgetType}`;
+  type: WidgetType;
   objectUniversalIdentifier?: string;
   conditionalDisplay?: PageLayoutWidgetConditionalDisplay;
   position?: PageLayoutWidgetPosition;
+  heightBehavior?: PageLayoutWidgetVerticalListHeightBehavior;
   configuration: PageLayoutWidgetUniversalConfiguration;
+};
+
+export type StandalonePageLayoutWidgetManifest = PageLayoutWidgetManifest & {
+  pageLayoutTabUniversalIdentifier: string;
+  position: PageLayoutWidgetPosition;
 };
 
 export type PageLayoutTabManifest = SyncableEntityOptions & {
@@ -28,7 +35,7 @@ export type PageLayoutTabManifest = SyncableEntityOptions & {
 
 export type PageLayoutManifest = SyncableEntityOptions & {
   name: string;
-  type: `${PageLayoutType}`;
+  type: PageLayoutType;
   objectUniversalIdentifier?: string;
   defaultTabToFocusOnMobileAndSidePanelUniversalIdentifier?: string;
   tabs?: PageLayoutTabManifest[];

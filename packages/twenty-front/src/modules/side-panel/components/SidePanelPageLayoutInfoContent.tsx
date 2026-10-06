@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import { useUpdatePageLayoutTab } from '@/page-layout/hooks/useUpdatePageLayoutTab';
 import { useUpdatePageLayoutWidget } from '@/page-layout/hooks/useUpdatePageLayoutWidget';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
@@ -15,11 +16,11 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { css } from '@linaria/core';
 import { styled } from '@linaria/react';
 import { isNonEmptyString } from '@sniptt/guards';
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { SidePanelPages } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { useIcons } from 'twenty-ui/icon';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { useTheme } from 'twenty-ui/theme';
 import { HeaderIdentifier } from '@/ui/layout/page/components/HeaderIdentifier';
 
 const StyledClickableIconWrapper = styled.div`
@@ -38,7 +39,7 @@ export const SidePanelPageLayoutInfoContent = ({
 }: {
   pageLayoutId: string;
 }) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { getIcon } = useIcons();
   const sidePanelPageInfo = useAtomStateValue(sidePanelPageInfoSelector);
   const sidePanelPage = sidePanelPageInfo.page;
@@ -150,7 +151,7 @@ export const SidePanelPageLayoutInfoContent = ({
         onChange={handleIconChange}
         className={iconPickerContainerStyles}
         clickableComponent={
-          <StyledClickableIconWrapper>
+          <StyledClickableIconWrapper aria-label={t`Choose icon`}>
             {renderedIcon}
           </StyledClickableIconWrapper>
         }

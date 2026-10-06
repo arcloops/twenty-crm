@@ -1,7 +1,9 @@
 import {
   FieldMetadataType,
+  MetadataReadability,
   MetadataWritability,
   ObjectOpenRecordIn,
+  ObjectSharingReach,
 } from 'twenty-shared/types';
 
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
@@ -30,6 +32,7 @@ describe('getFieldMetadataIdToColumnNamesMap', () => {
     universalIdentifier: 'test-object-id',
     indexMetadataIds: [],
     searchFieldMetadataIds: [],
+    navigationMenuItemIds: [],
     commandMenuItemIds: [],
     objectPermissionIds: [],
     fieldPermissionIds: [],
@@ -46,6 +49,9 @@ describe('getFieldMetadataIdToColumnNamesMap', () => {
     isUIEditable: true,
     isUICreatable: true,
     writability: MetadataWritability.OPEN,
+    readability: MetadataReadability.OPEN,
+    readabilityParentFieldUniversalIdentifiers: null,
+    sharingReach: ObjectSharingReach.WORKSPACE,
     openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
     labelIdentifierFieldMetadataId: null,
     imageIdentifierFieldMetadataId: null,
@@ -58,6 +64,7 @@ describe('getFieldMetadataIdToColumnNamesMap', () => {
     pageLayoutUniversalIdentifiers: [],
     indexMetadataUniversalIdentifiers: [],
     searchFieldMetadataUniversalIdentifiers: [],
+    navigationMenuItemUniversalIdentifiers: [],
     commandMenuItemUniversalIdentifiers: [],
     labelIdentifierFieldMetadataUniversalIdentifier: null,
     imageIdentifierFieldMetadataUniversalIdentifier: null,

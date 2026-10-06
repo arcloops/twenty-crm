@@ -1,15 +1,19 @@
+import { RecordIndexRemoveSortingModal } from '@/object-record/record-index/components/RecordIndexRemoveSortingModal';
 import { hasRecordGroupsComponentSelector } from '@/object-record/record-group/states/selectors/hasRecordGroupsComponentSelector';
 import { RecordListBody } from '@/object-record/record-list/components/RecordListBody';
+import { RecordListDragDropProvider } from '@/object-record/record-list/components/RecordListDragDropProvider';
 import { RecordListFieldTooltip } from '@/object-record/record-list/components/RecordListFieldTooltip';
 import { RecordListRecordGroupsBody } from '@/object-record/record-list/components/RecordListRecordGroupsBody';
 import { RecordListResponsiveFieldsEffect } from '@/object-record/record-list/components/RecordListResponsiveFieldsEffect';
+import { RecordListSSESubscribeEffect } from '@/object-record/record-list/components/RecordListSSESubscribeEffect';
 import { RecordListComponentInstanceContext } from '@/object-record/record-list/states/contexts/RecordListComponentInstanceContext';
+import { RecordSelectionEscapeHotkeyEffect } from '@/object-record/record-selection/components/RecordSelectionEscapeHotkeyEffect';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { styled } from '@linaria/react';
 import { useState } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   box-sizing: border-box;
@@ -35,13 +39,23 @@ export const RecordList = () => {
   return (
     <StyledContainer ref={setContainerElement}>
       <RecordListResponsiveFieldsEffect containerElement={containerElement} />
-      <ScrollWrapper
-        componentInstanceId={`scroll-wrapper-record-list-${recordListId}`}
-        defaultEnableXScroll={false}
-      >
-        {hasRecordGroups ? <RecordListRecordGroupsBody /> : <RecordListBody />}
-      </ScrollWrapper>
-      <RecordListFieldTooltip />
+      <RecordSelectionEscapeHotkeyEffect />
+      <RecordListSSESubscribeEffect />
+      <RecordIndexRemoveSortingModal />
+      <RecordListFieldTooltip>
+        <ScrollWrapper
+          componentInstanceId={`scroll-wrapper-record-list-${recordListId}`}
+          defaultEnableXScroll={false}
+        >
+          <RecordListDragDropProvider>
+            {hasRecordGroups ? (
+              <RecordListRecordGroupsBody />
+            ) : (
+              <RecordListBody />
+            )}
+          </RecordListDragDropProvider>
+        </ScrollWrapper>
+      </RecordListFieldTooltip>
     </StyledContainer>
   );
 };

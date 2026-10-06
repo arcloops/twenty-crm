@@ -3,23 +3,23 @@ import {
   type Meta,
   type StoryObj,
 } from '@storybook/react-vite';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { userEvent, within } from 'storybook/test';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
 import { ComponentDecorator } from 'twenty-ui/testing';
 
 import { AiChatMessage } from '@/ai/components/AiChatMessage';
+import { MarkdownLoadingSkeleton } from '@/ai/components/LazyMarkdownRenderer';
 
 import { AgentChatComponentInstanceContext } from '@/ai/contexts/AgentChatComponentInstanceContext';
 import { agentChatDisplayedThreadState } from '@/ai/states/agentChatDisplayedThreadState';
-import { agentChatMessageComponentFamilyState } from '@/ai/states/agentChatMessageComponentFamilyState';
 import { agentChatMessagesComponentFamilyState } from '@/ai/states/agentChatMessagesComponentFamilyState';
 import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
 
 import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
 import { RootDecorator } from '~/testing/decorators/RootDecorator';
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
 
 const StyledConversationContainer = styled.div`
   display: flex;
@@ -238,6 +238,37 @@ const mockThinkingStepsDone: ExtendedUIMessage = {
   },
 };
 
+const mockAnsweredForm: ExtendedUIMessage = {
+  id: 'msg-answered-form',
+  role: 'assistant',
+  parts: [
+    {
+      type: 'tool-request_form',
+      toolCallId: 'tool-request-form',
+      input: {
+        fields: [
+          { name: 'callDate', label: 'Call date', type: 'DATE' },
+          { name: 'summary', label: 'Summary', type: 'TEXT' },
+        ],
+      },
+      output: {
+        success: true,
+        result: {
+          status: 'answered',
+          values: {
+            callDate: '2026-09-29',
+            summary: 'Pipeline import first, SSO the week after.',
+          },
+        },
+      },
+      state: 'output-available',
+    },
+  ],
+  metadata: {
+    createdAt: new Date().toISOString(),
+  },
+};
+
 const allMockMessages = [
   mockUserMessage,
   mockAssistantWithCodeExecution,
@@ -247,6 +278,7 @@ const allMockMessages = [
   mockCodeExecutionError,
   mockThinkingStepsStreaming,
   mockThinkingStepsDone,
+  mockAnsweredForm,
 ];
 
 const AgentChatMessagesSetterEffect = ({
@@ -268,16 +300,6 @@ const AgentChatMessagesSetterEffect = ({
       }),
       messages,
     );
-
-    for (const message of messages) {
-      store.set(
-        agentChatMessageComponentFamilyState.atomFamily({
-          instanceId: INSTANCE_ID,
-          familyKey: message.id,
-        }),
-        message,
-      );
-    }
   }, [messages, store]);
 
   return null;
@@ -288,7 +310,9 @@ const AgentChatInstanceDecorator: Decorator = (Story) => (
     value={{ instanceId: INSTANCE_ID }}
   >
     <AgentChatMessagesSetterEffect messages={allMockMessages} />
-    <Story />
+    <Suspense fallback={<MarkdownLoadingSkeleton />}>
+      <Story />
+    </Suspense>
   </AgentChatComponentInstanceContext.Provider>
 );
 
@@ -298,7 +322,7 @@ const meta: Meta<typeof AiChatMessage> = {
   decorators: [
     ComponentDecorator,
     RootDecorator,
-    SnackBarDecorator,
+    ToastDecorator,
     AgentChatInstanceDecorator,
   ],
   parameters: {
@@ -356,4 +380,8 @@ export const ThinkingStepsDoneExpanded: Story = {
 
     await userEvent.click(summaryButton);
   },
+};
+
+export const AnsweredForm: Story = {
+  render: () => <AiChatMessage messageId={mockAnsweredForm.id} />,
 };

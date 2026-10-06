@@ -1,11 +1,16 @@
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { randomUUID } from 'crypto';
 
 import { gql } from 'graphql-tag';
 import { type DataSource } from 'typeorm';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+import { type AgentHistoryUpgradeStorageService } from 'src/database/commands/agent-history/agent-history-upgrade-storage.service';
+import { type AgentHistoryObjectName } from 'src/engine/metadata-modules/ai/ai-history/types/agent-history-object-name.type';
+import { escapeIdentifier } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 import { v5 } from 'uuid';
 
-import { makeAdminPanelAPIRequestWithGuestRole } from 'test/integration/graphql/suites/admin-panel/utils/make-admin-panel-api-request-with-guest-role.util';
-import { makeAdminPanelAPIRequest } from 'test/integration/twenty-config/utils/make-admin-panel-api-request.util';
+import { makeAdminPanelApiRequestWithGuestRole } from 'test/integration/graphql/suites/admin-panel/utils/make-admin-panel-api-request-with-guest-role.util';
+import { makeAdminPanelApiRequest } from 'test/integration/twenty-config/utils/make-admin-panel-api-request.util';
 
 import { WORKSPACE_SETUP_CHAT_THREAD_ID_NAMESPACE } from 'src/engine/metadata-modules/ai/ai-chat/constants/workspace-setup-chat-thread-id-namespace.constant';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
@@ -96,7 +101,9 @@ type ThreadsResult = {
 
 describe('Admin panel global chat threads (integration)', () => {
   let dataSource: DataSource;
+  let storage: AgentHistoryUpgradeStorageService;
   let userWorkspaceId: string;
+  let workspaceMemberId: string;
   let userEmail: string;
   let kickoffThreadId: string;
   let deterministicThreadId: string;
@@ -107,6 +114,20 @@ describe('Admin panel global chat threads (integration)', () => {
   const seededMessageIds: string[] = [];
   const seededPartIds: string[] = [];
 
+  const insertHistory = async (
+    name: AgentHistoryObjectName,
+    columns: string[],
+    values: unknown[],
+    onConflict = '',
+  ): Promise<void> => {
+    await storage.run(SEED_APPLE_WORKSPACE_ID, async (context) => {
+      await context.manager.query(
+        `INSERT INTO ${context.table(name)} (${columns.map(escapeIdentifier).join(', ')}) VALUES (${values.map((_, index) => `$${index + 1}`).join(', ')}) ${onConflict}`,
+        values,
+      );
+    });
+  };
+
   const insertThread = async ({
     id,
     title,
@@ -116,18 +137,23 @@ describe('Admin panel global chat threads (integration)', () => {
     title: string;
     lastStreamError?: object;
   }): Promise<string> => {
-    await dataSource.query(
-      `INSERT INTO core."agentChatThread"
-        (id, "workspaceId", "userWorkspaceId", title, "lastStreamError")
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO UPDATE SET "lastStreamError" = EXCLUDED."lastStreamError"`,
+    await insertHistory(
+      'agentChatThread',
+      [
+        'id',
+        'workspaceMemberId',
+        'userWorkspaceId',
+        'title',
+        'lastStreamError',
+      ],
       [
         id,
-        SEED_APPLE_WORKSPACE_ID,
+        workspaceMemberId,
         userWorkspaceId,
         title,
         lastStreamError ? JSON.stringify(lastStreamError) : null,
       ],
+      'ON CONFLICT (id) DO UPDATE SET "lastStreamError" = EXCLUDED."lastStreamError"',
     );
 
     seededThreadIds.push(id);
@@ -142,17 +168,16 @@ describe('Admin panel global chat threads (integration)', () => {
     createdAt,
   }: {
     threadId: string;
-    role: 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant';
     isHidden?: boolean;
     createdAt: string;
   }): Promise<string> => {
     const id = randomUUID();
 
-    await dataSource.query(
-      `INSERT INTO core."agentMessage"
-        (id, "workspaceId", "threadId", role, "isHidden", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, SEED_APPLE_WORKSPACE_ID, threadId, role, isHidden, createdAt],
+    await insertHistory(
+      'agentMessage',
+      ['id', 'threadId', 'role', 'isHidden', 'createdAt'],
+      [id, threadId, role, isHidden, createdAt],
     );
 
     seededMessageIds.push(id);
@@ -185,15 +210,23 @@ describe('Admin panel global chat threads (integration)', () => {
   }): Promise<string> => {
     const id = randomUUID();
 
-    await dataSource.query(
-      `INSERT INTO core."agentMessagePart"
-        (id, "workspaceId", "messageId", "orderIndex", type, "textContent",
-         "reasoningContent", "toolName", "toolCallId", "toolInput",
-         "toolOutput", state)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    await insertHistory(
+      'agentMessagePart',
+      [
+        'id',
+        'messageId',
+        'orderIndex',
+        'type',
+        'textContent',
+        'reasoningContent',
+        'toolName',
+        'toolCallId',
+        'toolInput',
+        'toolOutput',
+        'state',
+      ],
       [
         id,
-        SEED_APPLE_WORKSPACE_ID,
         messageId,
         orderIndex,
         type,
@@ -215,7 +248,7 @@ describe('Admin panel global chat threads (integration)', () => {
   const fetchThreads = async (
     variables: Record<string, unknown>,
   ): Promise<ThreadsResult> => {
-    const response = await makeAdminPanelAPIRequest({
+    const response = await makeAdminPanelApiRequest({
       query: GET_ADMIN_CHAT_THREADS,
       variables,
     });
@@ -227,11 +260,15 @@ describe('Admin panel global chat threads (integration)', () => {
 
   beforeAll(async () => {
     dataSource = global.testDataSource;
+    storage = getAppProviderByClassName<AgentHistoryUpgradeStorageService>(
+      'AgentHistoryUpgradeStorageService',
+    );
 
     const [firstUserWorkspace] = await dataSource.query(
-      `SELECT "userWorkspace".id, "user".email
+      `SELECT "userWorkspace".id, "user".email, "workspaceMember".id AS "workspaceMemberId"
        FROM core."userWorkspace" "userWorkspace"
        JOIN core."user" "user" ON "user".id = "userWorkspace"."userId"
+       JOIN "${getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID)}"."workspaceMember" "workspaceMember" ON "workspaceMember"."userId" = "user".id AND "workspaceMember"."deletedAt" IS NULL
        WHERE "userWorkspace"."workspaceId" = $1
          AND "userWorkspace"."deletedAt" IS NULL
        ORDER BY "userWorkspace"."createdAt" ASC
@@ -240,21 +277,21 @@ describe('Admin panel global chat threads (integration)', () => {
     );
 
     userWorkspaceId = firstUserWorkspace.id;
+    workspaceMemberId = firstUserWorkspace.workspaceMemberId;
     userEmail = firstUserWorkspace.email;
 
     kickoffThreadId = await insertThread({
       id: randomUUID(),
       title: 'integration-onboarding-kickoff-thread',
     });
-    const hiddenKickoffMessageId = await insertMessage({
+    const kickoffContextMessageId = await insertMessage({
       threadId: kickoffThreadId,
-      role: 'user',
-      isHidden: true,
+      role: 'system',
       createdAt: '2026-01-01T00:00:00Z',
     });
 
     await insertPart({
-      messageId: hiddenKickoffMessageId,
+      messageId: kickoffContextMessageId,
       orderIndex: 0,
       type: 'text',
       textContent: 'kickoff prompt with company context',
@@ -342,17 +379,17 @@ describe('Admin panel global chat threads (integration)', () => {
     await insertPart({
       messageId: answeredQuestionMessageId,
       orderIndex: 0,
-      type: 'tool-ask_questions',
-      toolName: 'ask_questions',
-      toolCallId: 'call-answered-questions',
-      toolInput: { questions: questionItems },
+      type: 'tool-ask_question',
+      toolName: 'ask_question',
+      toolCallId: 'call-answered-question',
+      toolInput: questionItems[0],
       toolOutput: {
         success: true,
-        message: 'User answered the questions.',
+        message: 'User answered the question.',
         result: {
-          questions: questionItems,
+          question: questionItems[0],
           status: 'answered',
-          answers: [{ questionIndex: 0, selectedOptionIndices: [0] }],
+          answer: { selectedOptionIndices: [0] },
         },
       },
       state: 'output-available',
@@ -392,26 +429,20 @@ describe('Admin panel global chat threads (integration)', () => {
   });
 
   afterAll(async () => {
-    if (seededPartIds.length > 0) {
-      await dataSource.query(
-        `DELETE FROM core."agentMessagePart" WHERE id = ANY($1)`,
-        [seededPartIds],
-      );
-    }
-
-    if (seededMessageIds.length > 0) {
-      await dataSource.query(
-        `DELETE FROM core."agentMessage" WHERE id = ANY($1)`,
-        [seededMessageIds],
-      );
-    }
-
-    if (seededThreadIds.length > 0) {
-      await dataSource.query(
-        `DELETE FROM core."agentChatThread" WHERE id = ANY($1)`,
-        [seededThreadIds],
-      );
-    }
+    await storage.run(SEED_APPLE_WORKSPACE_ID, async (context) => {
+      for (const { name, ids } of [
+        { name: 'agentMessagePart' as const, ids: seededPartIds },
+        { name: 'agentMessage' as const, ids: seededMessageIds },
+        { name: 'agentChatThread' as const, ids: seededThreadIds },
+      ]) {
+        if (ids.length > 0) {
+          await context.manager.query(
+            `DELETE FROM ${context.table(name)} WHERE id = ANY($1)`,
+            [ids],
+          );
+        }
+      }
+    });
 
     await dataSource.query(
       `UPDATE core."workspace" SET "allowImpersonation" = true WHERE id = $1`,
@@ -459,6 +490,59 @@ describe('Admin panel global chat threads (integration)', () => {
         userReplyCount: 0,
         userEmail,
       });
+    });
+
+    it('reports a soft deleted thread with its deletion date', async () => {
+      const deletedThreadId = await insertThread({
+        id: randomUUID(),
+        title: 'integration-soft-deleted-thread',
+      });
+
+      await storage.run(SEED_APPLE_WORKSPACE_ID, (context) =>
+        context.manager.query(
+          `UPDATE ${context.table('agentChatThread')} SET "deletedAt" = $2 WHERE id = $1`,
+          [deletedThreadId, '2026-01-02T00:00:00.000Z'],
+        ),
+      );
+
+      const result = await fetchThreads({
+        scope: 'ALL',
+        searchTerm: deletedThreadId,
+      });
+
+      expect(result.threads).toEqual([
+        expect.objectContaining({
+          id: deletedThreadId,
+          deletedAt: '2026-01-02T00:00:00.000Z',
+        }),
+      ]);
+    });
+
+    // Workflow-run conversations belong to no member; a null owner must not fail the whole list on a non-null field.
+    it('lists a thread without an owner', async () => {
+      const ownerlessThreadId = randomUUID();
+
+      await insertHistory(
+        'agentChatThread',
+        ['id', 'userWorkspaceId', 'title'],
+        [ownerlessThreadId, null, 'Workflow run conversation'],
+        'ON CONFLICT (id) DO NOTHING',
+      );
+      seededThreadIds.push(ownerlessThreadId);
+
+      const result = await fetchThreads({
+        scope: 'ALL',
+        searchTerm: ownerlessThreadId,
+      });
+
+      expect(result.threads).toEqual([
+        expect.objectContaining({
+          id: ownerlessThreadId,
+          userWorkspaceId: null,
+          userEmail: null,
+          isOnboardingThread: false,
+        }),
+      ]);
     });
 
     it('counts only visible messages and user replies', async () => {
@@ -607,7 +691,7 @@ describe('Admin panel global chat threads (integration)', () => {
     });
 
     it('rejects a caller without the SECURITY permission flag', async () => {
-      const response = await makeAdminPanelAPIRequestWithGuestRole({
+      const response = await makeAdminPanelApiRequestWithGuestRole({
         query: GET_ADMIN_CHAT_THREADS,
         variables: {},
       });
@@ -618,8 +702,8 @@ describe('Admin panel global chat threads (integration)', () => {
   });
 
   describe('getAdminChatThreadMessages', () => {
-    it('returns the hidden kickoff first with enriched ordered parts', async () => {
-      const response = await makeAdminPanelAPIRequest({
+    it('returns the kickoff context first with enriched ordered parts', async () => {
+      const response = await makeAdminPanelApiRequest({
         query: GET_ADMIN_CHAT_THREAD_MESSAGES,
         variables: { threadId: kickoffThreadId },
       });
@@ -631,8 +715,8 @@ describe('Admin panel global chat threads (integration)', () => {
       expect(result.thread.messageCount).toBe(2);
       expect(result.messages).toHaveLength(3);
       expect(result.messages[0]).toMatchObject({
-        role: 'USER',
-        isHidden: true,
+        role: 'SYSTEM',
+        isHidden: false,
       });
       expect(result.messages[0].parts[0].textContent).toBe(
         'kickoff prompt with company context',

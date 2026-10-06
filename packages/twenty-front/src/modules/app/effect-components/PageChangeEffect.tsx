@@ -3,6 +3,7 @@ import { useWorkspaceRouteObjects } from '@/app/routing/components/WorkspaceRout
 import { isAppEffectRedirectEnabledState } from '@/app/states/isAppEffectRedirectEnabledState';
 import { useReturnToPath } from '@/auth/hooks/useReturnToPath';
 import { useIsOnAuthOrOnboardingPage } from '@/auth/hooks/useIsOnAuthOrOnboardingPage';
+import { isLogConsoleFullScreenState } from '@/log-console/states/isLogConsoleFullScreenState';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { SIDE_PANEL_PATH_SEARCH_PARAM } from '@/side-panel/routing/constants/SidePanelPathSearchParam';
 import { isWorkspaceLocationAvailableOnSurface } from '@/app/routing/utils/isWorkspaceLocationAvailableOnSurface';
@@ -13,12 +14,10 @@ import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
 import { ContextStoreViewType } from '@/context-store/types/ContextStoreViewType';
 import { CoreObjectNamePlural } from '@/object-metadata/types/CoreObjectNamePlural';
-import { shouldOpenAiChatAfterOnboardingState } from '@/onboarding/states/shouldOpenAiChatAfterOnboardingState';
 import { useActiveRecordBoardCard } from '@/object-record/record-board/hooks/useActiveRecordBoardCard';
 import { useFocusedRecordBoardCard } from '@/object-record/record-board/hooks/useFocusedRecordBoardCard';
-import { useResetRecordBoardSelection } from '@/object-record/record-board/hooks/useResetRecordBoardSelection';
 import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
-import { useResetTableRowSelection } from '@/object-record/record-table/hooks/internal/useResetTableRowSelection';
+import { useResetRecordSelection } from '@/object-record/record-selection/hooks/useResetRecordSelection';
 import { useActiveRecordTableRow } from '@/object-record/record-table/hooks/useActiveRecordTableRow';
 import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/useFocusedRecordTableRow';
 import { useOpenNewRecordTitleCell } from '@/object-record/record-title-cell/hooks/useOpenNewRecordTitleCell';
@@ -38,11 +37,9 @@ import { AppBasePath, AppPath, SidePanelPages } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { usePageChangeEffectNavigateLocation } from '~/hooks/usePageChangeEffectNavigateLocation';
 import { getPageLayoutIdForLocation } from '~/modules/app/utils/getPageLayoutIdForLocation';
-import { isAiChatPath } from '~/utils/isAiChatPath';
 import { isMatchingLocation } from '~/utils/isMatchingLocation';
 
 // TODO: break down into smaller functions and / or hooks
-//  - moved usePageChangeEffectNavigateLocation into dedicated hook
 export const PageChangeEffect = () => {
   const store = useStore();
   const navigate = useNavigate();
@@ -68,8 +65,7 @@ export const PageChangeEffect = () => {
   const pageChangeEffectNavigateLocation =
     usePageChangeEffectNavigateLocation();
 
-  //TODO: refactor useResetTableRowSelection hook to not throw when the argument `recordTableId` is an empty string
-  // - replace CoreObjectNamePlural.Person
+  // TODO: make useResetRecordSelection accept an empty recordIndexId, then drop CoreObjectNamePlural.Person
   const objectNamePlural =
     matchPath(AppPath.RecordIndexPage, location.pathname)?.params
       .objectNamePlural ?? CoreObjectNamePlural.Person;
@@ -89,12 +85,10 @@ export const PageChangeEffect = () => {
     contextStoreCurrentViewId || '',
   );
 
-  const { resetTableRowSelection } = useResetTableRowSelection(recordIndexId);
+  const { resetRecordSelection } = useResetRecordSelection(recordIndexId);
   const { unfocusRecordTableRow } = useFocusedRecordTableRow(recordIndexId);
   const { deactivateRecordTableRow } = useActiveRecordTableRow(recordIndexId);
 
-  const { resetRecordBoardSelection } =
-    useResetRecordBoardSelection(recordIndexId);
   const { deactivateBoardCard } = useActiveRecordBoardCard(recordIndexId);
   const { unfocusBoardCard } = useFocusedRecordBoardCard(recordIndexId);
 
@@ -123,7 +117,6 @@ export const PageChangeEffect = () => {
       if (!hasRoutedSidePanelTarget) {
         const currentPage = store.get(sidePanelPageInfoSelector.atom).page;
         const shouldKeepSidePanelOpen =
-          currentPage === SidePanelPages.NavigationMenuItemEdit ||
           currentPage === SidePanelPages.AskAI ||
           currentPage === SidePanelPages.RoutedPage;
 
@@ -134,6 +127,7 @@ export const PageChangeEffect = () => {
 
       setPreviousLocation(location.pathname);
       executeTasksOnAnyLocationChange();
+      store.set(isLogConsoleFullScreenState.atom, false);
 
       const newPageLayoutId = getPageLayoutIdForLocation({
         location,
@@ -173,13 +167,6 @@ export const PageChangeEffect = () => {
       if (consumedReturnToPath) {
         clearReturnToPath();
       }
-
-      if (
-        store.get(shouldOpenAiChatAfterOnboardingState.atom) &&
-        !isAiChatPath(pageChangeEffectNavigateLocation)
-      ) {
-        store.set(shouldOpenAiChatAfterOnboardingState.atom, false);
-      }
     }
   }, [
     navigate,
@@ -199,13 +186,13 @@ export const PageChangeEffect = () => {
     );
 
     if (isLeavingRecordIndexPage) {
+      resetRecordSelection();
+
       if (contextStoreCurrentViewType === ContextStoreViewType.Table) {
-        resetTableRowSelection();
         unfocusRecordTableRow();
         deactivateRecordTableRow();
       }
       if (contextStoreCurrentViewType === ContextStoreViewType.Kanban) {
-        resetRecordBoardSelection();
         deactivateBoardCard();
         unfocusBoardCard();
       }
@@ -353,6 +340,22 @@ export const PageChangeEffect = () => {
         });
         break;
       }
+      case isMatchingLocation(location, AppPath.InstallApps): {
+        resetFocusStackToFocusItem({
+          focusStackItem: {
+            focusId: PageFocusId.InstallApps,
+            componentInstance: {
+              componentType: FocusComponentType.PAGE,
+              componentInstanceId: PageFocusId.InstallApps,
+            },
+            globalHotkeysConfig: {
+              enableGlobalHotkeysWithModifiers: false,
+              enableGlobalHotkeysConflictingWithKeyboard: false,
+            },
+          },
+        });
+        break;
+      }
       case isMatchingLocation(location, AppPath.InviteTeam): {
         resetFocusStackToFocusItem({
           focusStackItem: {
@@ -406,10 +409,9 @@ export const PageChangeEffect = () => {
     location,
     previousLocation,
     contextStoreCurrentViewType,
-    resetTableRowSelection,
+    resetRecordSelection,
     unfocusRecordTableRow,
     deactivateRecordTableRow,
-    resetRecordBoardSelection,
     deactivateBoardCard,
     unfocusBoardCard,
     resetFocusStackToRecordIndex,

@@ -1,4 +1,5 @@
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useApolloClient } from '@apollo/client/react';
 import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
@@ -9,54 +10,59 @@ import {
   isValidUuid,
   tipTapDocumentToMarkdown,
 } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components';
 import { v4 } from 'uuid';
 
-import { AGENT_CHAT_INSTANCE_ID } from '@/ai/constants/AgentChatInstanceId';
 import { AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME } from '@/ai/constants/AgentChatRefetchMessagesEventName';
 import { AGENT_CHAT_RESTORE_EDITOR_CONTENT_EVENT_NAME } from '@/ai/constants/AgentChatRestoreEditorContentEventName';
 import { AGENT_CHAT_SEND_MESSAGE_EVENT_NAME } from '@/ai/constants/AgentChatSendMessageEventName';
 import { AGENT_CHAT_STOP_EVENT_NAME } from '@/ai/constants/AgentChatStopEventName';
-import { SEND_CHAT_MESSAGE } from '@/ai/graphql/mutations/sendChatMessage';
-import { STOP_AGENT_CHAT_STREAM } from '@/ai/graphql/mutations/stopAgentChatStream';
+import { useAddAgentChatThreadParticipants } from '@/ai/hooks/useAddAgentChatThreadParticipants';
 import { useAgentChatModelId } from '@/ai/hooks/useAgentChatModelId';
-import { useGetBrowsingContext } from '@/ai/hooks/useBrowsingContext';
+import { useAttachChatThreadToRecord } from '@/ai/hooks/useAttachChatThreadToRecord';
+import { useGetBrowsingContext } from '@/ai/hooks/useGetBrowsingContext';
+import { useOptimisticallyRestoreOnSend } from '@/ai/hooks/useOptimisticallyRestoreOnSend';
 import { useProjectAiChatThreadToUrl } from '@/ai/hooks/useProjectAiChatThreadToUrl';
-import { useOptimisticallyUnarchiveOnSend } from '@/ai/hooks/useOptimisticallyUnarchiveOnSend';
-import { useWorkspaceAiModelAvailability } from '@/ai/hooks/useWorkspaceAiModelAvailability';
 import {
   AGENT_CHAT_NEW_THREAD_DRAFT_KEY,
   agentChatDraftsByThreadIdState,
 } from '@/ai/states/agentChatDraftsByThreadIdState';
-import { agentChatErrorComponentFamilyState } from '@/ai/states/agentChatErrorComponentFamilyState';
-import { agentChatInputState } from '@/ai/states/agentChatInputState';
-import { agentChatIsAwaitingFirstChunkComponentFamilyState } from '@/ai/states/agentChatIsAwaitingFirstChunkComponentFamilyState';
 import { agentChatLastSentBrowsingContextFamilyState } from '@/ai/states/agentChatLastSentBrowsingContextFamilyState';
-import { agentChatMessagesComponentFamilyState } from '@/ai/states/agentChatMessagesComponentFamilyState';
 import { agentChatSelectedFilesState } from '@/ai/states/agentChatSelectedFilesState';
+import { agentChatSentMessageHandOffState } from '@/ai/states/agentChatSentMessageHandOffState';
 import { agentChatUploadedFilesState } from '@/ai/states/agentChatUploadedFilesState';
 import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
-import { AiChatErrorCode } from '@/ai/utils/aiChatErrorCode';
+import { getAgentChatThreadAtoms } from '@/ai/utils/getAgentChatThreadAtoms';
+import { getConversationTargetsFromSerializedDocument } from '@/ai/utils/getConversationTargetsFromSerializedDocument';
+import { isAiChatCreditsExhaustedError } from '@/ai/utils/isAiChatCreditsExhaustedError';
+import { toAiChatError } from '@/ai/utils/toAiChatError';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useListenToBrowserEvent } from '@/browser-event/hooks/useListenToBrowserEvent';
 import { dispatchBrowserEvent } from '@/browser-event/utils/dispatchBrowserEvent';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { aiModelsState } from '@/client-config/states/aiModelsState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import {
   markWorkspaceCreditsAvailable,
   markWorkspaceCreditsExhausted,
 } from '@/workspace/utils/updateWorkspaceResourceCreditCap';
-import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
+import {
+  SendChatMessageDocument,
+  StopAgentChatStreamDocument,
+} from '~/generated-metadata/graphql';
 
 export const useAgentChat = (
   ensureThreadIdForSend: () => Promise<string | null>,
 ) => {
   const { modelIdForRequest } = useAgentChatModelId();
-  const { enabledModels } = useWorkspaceAiModelAvailability();
+  const aiModels = useAtomStateValue(aiModelsState);
   const { getBrowsingContext } = useGetBrowsingContext();
-  const { applyOptimisticUnarchive } = useOptimisticallyUnarchiveOnSend();
+  const { applyOptimisticRestore } = useOptimisticallyRestoreOnSend();
+  const { attachChatThreadToRecord } = useAttachChatThreadToRecord();
+  const { addParticipantsMentionedInMessage } =
+    useAddAgentChatThreadParticipants();
   const apolloClient = useApolloClient();
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const setCurrentAiChatThread = useSetAtomState(currentAiChatThreadState);
   const { projectAiChatThreadToUrl } = useProjectAiChatThreadToUrl();
   const store = useStore();
@@ -65,7 +71,6 @@ export const useAgentChat = (
     agentChatUploadedFilesState,
   );
 
-  const [, setAgentChatInput] = useAtomState(agentChatInputState);
   const setAgentChatDraftsByThreadId = useSetAtomState(
     agentChatDraftsByThreadIdState,
   );
@@ -84,9 +89,10 @@ export const useAgentChat = (
       return;
     }
 
-    if (enabledModels.length === 0) {
-      enqueueErrorSnackBar({
-        message: t`No AI models are enabled in this workspace.`,
+    if (aiModels.length === 0) {
+      enqueueToast({
+        variant: 'error',
+        children: t`No AI provider is configured on this instance.`,
       });
 
       return;
@@ -111,7 +117,6 @@ export const useAgentChat = (
       projectAiChatThreadToUrl(threadId);
     }
 
-    setAgentChatInput('');
     setAgentChatDraftsByThreadId((prev) => ({
       ...prev,
       [draftKey]: '',
@@ -131,10 +136,10 @@ export const useAgentChat = (
       : null;
     const messageId = v4();
     const optimisticMessageCreatedAt = new Date().toISOString();
-    const rollbackOptimisticUnarchive = applyOptimisticUnarchive(
+    const rollbackOptimisticRestore = applyOptimisticRestore({
       threadId,
-      optimisticMessageCreatedAt,
-    );
+      optimisticUpdatedAt: optimisticMessageCreatedAt,
+    });
 
     const optimisticUserMessage: ExtendedUIMessage = {
       id: messageId,
@@ -145,27 +150,27 @@ export const useAgentChat = (
       ],
       metadata: {
         createdAt: optimisticMessageCreatedAt,
+        senderUserWorkspaceId: store.get(currentWorkspaceMemberState.atom)
+          ?.userWorkspaceId,
       },
       status: 'sent',
     };
 
-    const messagesAtom = agentChatMessagesComponentFamilyState.atomFamily({
-      instanceId: AGENT_CHAT_INSTANCE_ID,
-      familyKey: { threadId },
-    });
-    const errorAtom = agentChatErrorComponentFamilyState.atomFamily({
-      instanceId: AGENT_CHAT_INSTANCE_ID,
-      familyKey: { threadId },
-    });
-    const isAwaitingFirstChunkAtom =
-      agentChatIsAwaitingFirstChunkComponentFamilyState.atomFamily({
-        instanceId: AGENT_CHAT_INSTANCE_ID,
-        familyKey: { threadId },
-      });
+    const { messagesAtom, errorAtom, isAwaitingFirstChunkAtom } =
+      getAgentChatThreadAtoms(threadId);
+    const removeOptimisticUserMessage = () => {
+      store.set(messagesAtom, (messages) =>
+        messages.filter((message) => message.id !== messageId),
+      );
+      store.set(isAwaitingFirstChunkAtom, false);
+    };
 
-    const currentMessages = store.get(messagesAtom);
-
-    store.set(messagesAtom, [...currentMessages, optimisticUserMessage]);
+    store.set(agentChatSentMessageHandOffState.atom, (sentMessageHandOff) =>
+      isDefined(sentMessageHandOff)
+        ? { ...sentMessageHandOff, messageId }
+        : null,
+    );
+    store.set(messagesAtom, (messages) => [...messages, optimisticUserMessage]);
     store.set(errorAtom, null);
     store.set(isAwaitingFirstChunkAtom, true);
 
@@ -173,40 +178,25 @@ export const useAgentChat = (
       id: file.fileId,
       filename: file.filename,
     }));
-    const uploadedFilesSnapshot = agentChatUploadedFiles;
 
     setAgentChatUploadedFiles([]);
 
     try {
-      const { data } = await apolloClient.mutate<{
-        sendChatMessage: {
-          messageId: string;
-          queued: boolean;
-          streamId?: string;
-        };
-      }>({
-        mutation: SEND_CHAT_MESSAGE,
+      const { data } = await apolloClient.mutate({
+        mutation: SendChatMessageDocument,
         variables: {
           threadId,
           text: contentToSend,
           messageId,
           browsingContext: browsingContextToSend,
-          modelId: modelIdForRequest ?? undefined,
+          modelId: modelIdForRequest,
           fileAttachments:
             fileAttachments.length > 0 ? fileAttachments : undefined,
         },
       });
 
-      // The stream this send started can exhaust the balance and publish
-      // credits-exhausted before this response resolves; that event marks the
-      // thread error, so its presence means the exhaustion is newer information
-      // than the gate pass this response proves.
-      if (
-        !isGraphqlErrorOfType(
-          store.get(errorAtom),
-          AiChatErrorCode.BILLING_CREDITS_EXHAUSTED,
-        )
-      ) {
+      // The stream may already have set a newer credits-exhausted error; don't clear it.
+      if (!isAiChatCreditsExhaustedError(store.get(errorAtom))) {
         store.set(currentWorkspaceState.atom, markWorkspaceCreditsAvailable);
       }
 
@@ -214,14 +204,19 @@ export const useAgentChat = (
         store.set(lastSentBrowsingContextAtom, browsingContext);
       }
 
-      if (data?.sendChatMessage?.queued) {
-        const latestMessages = store.get(messagesAtom);
+      // Filed after the send: a failed send restores the draft, so the retry files it.
+      getConversationTargetsFromSerializedDocument(
+        serializedContentToSend,
+      ).forEach((conversationTarget) => {
+        void attachChatThreadToRecord({ threadId, ...conversationTarget });
+      });
+      void addParticipantsMentionedInMessage({
+        threadId,
+        serializedMessage: serializedContentToSend,
+      });
 
-        store.set(
-          messagesAtom,
-          latestMessages.filter((message) => message.id !== messageId),
-        );
-        store.set(isAwaitingFirstChunkAtom, false);
+      if (data?.sendChatMessage.queued === true) {
+        removeOptimisticUserMessage();
       }
 
       dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
@@ -229,9 +224,8 @@ export const useAgentChat = (
       const restoredDraftKey =
         draftKey === AGENT_CHAT_NEW_THREAD_DRAFT_KEY ? threadId : draftKey;
 
-      rollbackOptimisticUnarchive?.();
+      rollbackOptimisticRestore();
 
-      setAgentChatInput(contentToSend);
       setAgentChatDraftsByThreadId((prev) => ({
         ...prev,
         [restoredDraftKey]: serializedContentToSend,
@@ -240,28 +234,14 @@ export const useAgentChat = (
           : {}),
       }));
       setAgentChatUploadedFiles((currentUploadedFiles) => [
-        ...uploadedFilesSnapshot,
+        ...agentChatUploadedFiles,
         ...currentUploadedFiles,
       ]);
 
-      const latestMessages = store.get(messagesAtom);
+      removeOptimisticUserMessage();
+      store.set(errorAtom, toAiChatError(error));
 
-      store.set(
-        messagesAtom,
-        latestMessages.filter((message) => message.id !== messageId),
-      );
-
-      store.set(isAwaitingFirstChunkAtom, false);
-      store.set(
-        errorAtom,
-        CombinedGraphQLErrors.is(error) || error instanceof Error
-          ? error
-          : new Error('An unexpected error occurred'),
-      );
-
-      if (
-        isGraphqlErrorOfType(error, AiChatErrorCode.BILLING_CREDITS_EXHAUSTED)
-      ) {
+      if (isAiChatCreditsExhaustedError(error)) {
         store.set(currentWorkspaceState.atom, markWorkspaceCreditsExhausted);
       }
 
@@ -269,20 +249,21 @@ export const useAgentChat = (
         content: serializedContentToSend,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store,
     ensureThreadIdForSend,
-    setAgentChatInput,
     getBrowsingContext,
     setAgentChatUploadedFiles,
     setAgentChatDraftsByThreadId,
     modelIdForRequest,
-    enabledModels,
-    enqueueErrorSnackBar,
+    aiModels,
+    enqueueToast,
     setCurrentAiChatThread,
+    projectAiChatThreadToUrl,
     apolloClient,
-    applyOptimisticUnarchive,
+    applyOptimisticRestore,
+    attachChatThreadToRecord,
+    addParticipantsMentionedInMessage,
   ]);
 
   useListenToBrowserEvent({
@@ -298,24 +279,19 @@ export const useAgentChat = (
     }
 
     store.set(
-      agentChatIsAwaitingFirstChunkComponentFamilyState.atomFamily({
-        instanceId: AGENT_CHAT_INSTANCE_ID,
-        familyKey: { threadId },
-      }),
+      getAgentChatThreadAtoms(threadId).isAwaitingFirstChunkAtom,
       false,
     );
 
     try {
       await apolloClient.mutate({
-        mutation: STOP_AGENT_CHAT_STREAM,
+        mutation: StopAgentChatStreamDocument,
         variables: { threadId },
       });
     } catch (error) {
-      enqueueErrorSnackBar({
-        apolloError: CombinedGraphQLErrors.is(error) ? error : undefined,
-      });
+      enqueueToast(getToastOptionsFromError({ error }));
     }
-  }, [store, apolloClient, enqueueErrorSnackBar]);
+  }, [store, apolloClient, enqueueToast]);
 
   useListenToBrowserEvent({
     eventName: AGENT_CHAT_STOP_EVENT_NAME,

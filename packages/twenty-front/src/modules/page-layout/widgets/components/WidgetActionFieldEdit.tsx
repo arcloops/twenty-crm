@@ -1,4 +1,3 @@
-import { useGetIsMetadataItemFromStandardApplication } from '@/object-metadata/hooks/useGetIsMetadataItemFromStandardApplication';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useIsRecordReadOnly } from '@/object-record/read-only/hooks/useIsRecordReadOnly';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
@@ -18,7 +17,6 @@ import { FieldWidgetEditAction } from '@/page-layout/widgets/field/components/Fi
 import { FieldWidgetRelationEditAction } from '@/page-layout/widgets/field/components/FieldWidgetRelationEditAction';
 import { useFieldWidgetFieldDefinition } from '@/page-layout/widgets/field/hooks/useFieldWidgetFieldDefinition';
 import { generateFieldWidgetInstanceId } from '@/page-layout/widgets/field/utils/generateFieldWidgetInstanceId';
-import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
 import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
 import { assertIsDefinedOrThrow } from 'twenty-shared/utils';
@@ -37,8 +35,6 @@ export const WidgetActionFieldEdit = ({
     useFieldWidgetFieldDefinition(widget);
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const getIsMetadataItemFromStandardApplication =
-    useGetIsMetadataItemFromStandardApplication();
 
   const { useUpdateOneObjectRecordMutation } = useRecordShowContainerActions({
     objectNameSingular: objectMetadataItem.nameSingular,
@@ -92,13 +88,7 @@ export const WidgetActionFieldEdit = ({
     isDisplayModeFixHeight: false,
     isRecordFieldReadOnly: isRecordFieldReadOnly({
       isRecordReadOnly,
-      isSystemObject: objectMetadataItem.isSystem,
-      objectPermissions: getObjectPermissionsFromMapByObjectMetadataId({
-        objectPermissionsByObjectMetadataId,
-        objectMetadataId: objectMetadataItem.id,
-      }),
-      isFieldFromStandardApplication:
-        getIsMetadataItemFromStandardApplication(fieldMetadataItem),
+      objectMetadataId: objectMetadataItem.id,
       fieldMetadataItem,
       fieldDefinition,
       objectPermissionsByObjectMetadataId,
@@ -107,16 +97,14 @@ export const WidgetActionFieldEdit = ({
   } satisfies GenericFieldContextType;
 
   return (
-    <RecordFieldsScopeContextProvider value={{ scopeInstanceId: instanceId }}>
-      <RecordFieldComponentInstanceContext.Provider
-        value={{
-          instanceId: recordFieldInputInstanceId,
-        }}
-      >
-        <FieldContext.Provider value={fieldContextValue}>
-          <FieldWidgetEditAction />
-        </FieldContext.Provider>
-      </RecordFieldComponentInstanceContext.Provider>
-    </RecordFieldsScopeContextProvider>
+    <RecordFieldComponentInstanceContext.Provider
+      value={{
+        instanceId: recordFieldInputInstanceId,
+      }}
+    >
+      <FieldContext.Provider value={fieldContextValue}>
+        <FieldWidgetEditAction />
+      </FieldContext.Provider>
+    </RecordFieldComponentInstanceContext.Provider>
   );
 };

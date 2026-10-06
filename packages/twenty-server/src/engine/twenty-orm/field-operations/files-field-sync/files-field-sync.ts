@@ -19,7 +19,7 @@ import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/
 import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
 import { getFlatFieldsFromFlatObjectMetadata } from 'src/engine/api/graphql/workspace-schema-builder/utils/get-flat-fields-for-flat-object-metadata.util';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
-import { FILE_STATUS } from 'src/engine/core-modules/file/types/file-status.types';
+import { FILE_STATUS } from 'src/engine/core-modules/file/types/file-status.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import {
@@ -119,6 +119,16 @@ export class FilesFieldSync {
       : null;
   }
 
+  isUpdatingFilesField(
+    updatePayload: Record<string, unknown>,
+    objectMetadataId: string,
+  ): boolean {
+    return this.isPayloadTouchingFilesFields(
+      updatePayload,
+      this.getFilesFields(objectMetadataId),
+    );
+  }
+
   computeFilesFieldDiffBeforeUpdateOne<Entity extends ObjectLiteral>(
     updatePayload: QueryDeepPartialEntity<Entity>,
     target: EntityTarget<Entity>,
@@ -131,15 +141,12 @@ export class FilesFieldSync {
 
     const filesFields = this.getFilesFields(objectMetadata.id);
 
-    if (filesFields.length === 0) {
-      return null;
-    }
-
-    const isModifyingFilesField = filesFields.some((filesField) =>
-      isDefined(updatePayload[filesField.name as keyof typeof updatePayload]),
-    );
-
-    if (!isModifyingFilesField) {
+    if (
+      !this.isPayloadTouchingFilesFields(
+        updatePayload as Record<string, unknown>,
+        filesFields,
+      )
+    ) {
       return null;
     }
 
@@ -633,6 +640,15 @@ export class FilesFieldSync {
 
       return updatedEntity;
     });
+  }
+
+  private isPayloadTouchingFilesFields(
+    updatePayload: Record<string, unknown>,
+    filesFields: OrmFlatFieldMetadata[],
+  ): boolean {
+    return filesFields.some((filesField) =>
+      isDefined(updatePayload[filesField.name]),
+    );
   }
 
   private getFilesFields(objectMetadataId: string): OrmFlatFieldMetadata[] {
