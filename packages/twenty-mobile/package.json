@@ -15,7 +15,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@lingui/core": "^5.9.5",
     "@lingui/react": "^5.9.5",
-    "@react-native-community/netinfo": "portal:./vendor/netinfo",
+    "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/drawer": "^7.14.3",
     "@react-navigation/native": "^7.5.0",
     "expo": "~57.0.26",

@@ -6,11 +6,20 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch this package + shared workspace packages we may import later
-config.watchFolders = [projectRoot, path.resolve(workspaceRoot, 'packages/twenty-shared')];
+// Expo monorepo: watch the workspace, resolve deps from app then root
+config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
+
+// Keep NetInfo resolvable when Metro's project root is the monorepo root
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules ?? {}),
+  '@react-native-community/netinfo': path.resolve(
+    projectRoot,
+    'node_modules/@react-native-community/netinfo',
+  ),
+};
 
 module.exports = config;
