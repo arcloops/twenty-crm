@@ -7,14 +7,14 @@ import { BusinessCardOcrService } from 'src/engine/core-modules/business-card/se
 import { BusinessCardService } from 'src/engine/core-modules/business-card/services/business-card.service';
 import { FileStorageModule } from 'src/engine/core-modules/file-storage/file-storage.module';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
-import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
+import { TwentyOrmModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ApplicationEntity, FileEntity]),
     FileStorageModule,
-    TwentyORMModule,
+    TwentyOrmModule,
   ],
   providers: [
     BusinessCardResolver,

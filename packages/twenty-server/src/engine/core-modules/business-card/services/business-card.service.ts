@@ -19,7 +19,7 @@ import {
   FileException,
   FileExceptionCode,
 } from 'src/engine/core-modules/file/file.exception';
-import { FILE_STATUS } from 'src/engine/core-modules/file/types/file-status.types';
+import { FILE_STATUS } from 'src/engine/core-modules/file/types/file-status.type';
 import { removeFileFolderFromFileEntityPath } from 'src/engine/core-modules/file/utils/remove-file-folder-from-file-entity-path.utils';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
@@ -214,7 +214,7 @@ export class BusinessCardService {
         .replace(/^www\./i, '')
         .split('/')[0];
 
-      const created = await companyRepository.save({
+      const [created] = await companyRepository.save({
         name: companyName.trim(),
         domainName: isNonEmptyString(domainFromWebsite)
           ? {
@@ -225,6 +225,10 @@ export class BusinessCardService {
           : undefined,
         position: 0,
       });
+
+      if (!isDefined(created?.id)) {
+        return null;
+      }
 
       return created.id;
     }, authContext);

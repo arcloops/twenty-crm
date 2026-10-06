@@ -140,7 +140,7 @@ export const useBusinessCardScan = () => {
         variables: {
           filename: image.filename,
           size,
-          fileFolder: 'agent-chat',
+          fileFolder: 'AgentChat',
         },
       });
 
@@ -254,7 +254,7 @@ export const useBusinessCardScan = () => {
           variables: {
             filename: image.filename,
             size,
-            fileFolder: 'files-field',
+            fileFolder: 'FilesField',
             fieldMetadataId: filesFieldMetadataId,
           },
         });

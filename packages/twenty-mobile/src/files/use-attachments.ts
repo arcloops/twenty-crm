@@ -110,7 +110,7 @@ export const useAttachments = (
         variables: {
           filename: asset.name,
           size: asset.size ?? 0,
-          fileFolder: 'files-field',
+          fileFolder: 'FilesField',
           fieldMetadataId: filesFieldMetadataId,
         },
       });

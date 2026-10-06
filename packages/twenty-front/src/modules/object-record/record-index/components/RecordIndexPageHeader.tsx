@@ -1,3 +1,7 @@
+import { styled } from '@linaria/react';
+import { isDefined } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme';
+
 import { ScanBusinessCardButton } from '@/business-card/components/ScanBusinessCardButton';
 import { RecordIndexCommandMenu } from '@/command-menu-item/components/RecordIndexCommandMenu';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
@@ -13,7 +17,6 @@ import { PageCardHeader } from '@/ui/layout/page/components/PageCardHeader';
 import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { isDefined } from 'twenty-shared/utils';
 
 const StyledActions = styled.div`
   align-items: center;

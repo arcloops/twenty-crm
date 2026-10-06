@@ -126,9 +126,11 @@ export class AddPersonOwnerFieldCommand extends ProvisionedWorkspaceCommandRunne
       }
     }
 
-    if (isDefined(dataSource)) {
+    const workspaceDataSource = dataSource;
+
+    if (isDefined(workspaceDataSource)) {
       await this.backfillOwnerFromCreatedBy({
-        dataSource,
+        dataSource: workspaceDataSource,
         workspaceId,
         isDryRun,
       });

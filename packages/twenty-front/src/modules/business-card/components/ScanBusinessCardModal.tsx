@@ -2,32 +2,41 @@ import { useMutation } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useCallback, useRef, useState } from 'react';
-import { CoreObjectNameSingular, FileFolder } from 'twenty-shared/types';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined, isNonEmptyString } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components';
 import { IconUpload } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
-import { H2Title } from 'twenty-ui/typography';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Button } from 'twenty-ui/primitives/input';
+import { Dialog } from 'twenty-ui/primitives/surfaces';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
 import {
   EXTRACT_PERSON_FROM_BUSINESS_CARD,
   type BusinessCardExtraction,
 } from '@/business-card/graphql/extractPersonFromBusinessCard';
-import { buildPersonInputFromBusinessCardDraft } from '@/business-card/utils/build-person-input-from-business-card-draft';
+import {
+  buildPersonInputFromBusinessCardDraft,
+  type ExistingPersonForBusinessCard,
+} from '@/business-card/utils/build-person-input-from-business-card-draft';
 import { useDirectFileUpload } from '@/file/hooks/useDirectFileUpload';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { TextInput } from '@/ui/input/components/TextInput';
-import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { DialogInstance } from '@/ui/layout/dialog/components/DialogInstance';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { FileFolder } from '~/generated-metadata/graphql';
 
-export const SCAN_BUSINESS_CARD_MODAL_ID = 'scan-business-card-modal';
+export const SCAN_BUSINESS_CARD_DIALOG_ID = 'scan-business-card-dialog';
+export const SCAN_BUSINESS_CARD_ATTACH_DIALOG_ID =
+  'scan-business-card-attach-dialog';
+
+// Keep legacy aliases for any external references
+export const SCAN_BUSINESS_CARD_MODAL_ID = SCAN_BUSINESS_CARD_DIALOG_ID;
 export const SCAN_BUSINESS_CARD_ATTACH_MODAL_ID =
-  'scan-business-card-attach-modal';
+  SCAN_BUSINESS_CARD_ATTACH_DIALOG_ID;
 
 const StyledBody = styled.div`
   display: flex;
@@ -142,16 +151,16 @@ const toDraft = (extraction: BusinessCardExtraction): DraftState => ({
 type CardSide = 'front' | 'back';
 
 type ScanBusinessCardModalProps = {
-  modalInstanceId?: string;
+  dialogId?: string;
   existingPersonId?: string;
 };
 
 export const ScanBusinessCardModal = ({
-  modalInstanceId = SCAN_BUSINESS_CARD_MODAL_ID,
+  dialogId = SCAN_BUSINESS_CARD_DIALOG_ID,
   existingPersonId,
 }: ScanBusinessCardModalProps) => {
-  const { closeModal } = useModal();
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
+  const { closeDialog } = useDialog();
+  const { enqueueToast } = useToast();
   const { uploadFile } = useDirectFileUpload();
   const { uploadAttachmentFile } = useUploadAttachmentFile();
   const frontInputRef = useRef<HTMLInputElement>(null);
@@ -204,7 +213,7 @@ export const ScanBusinessCardModal = ({
 
   const handleClose = () => {
     reset();
-    closeModal(modalInstanceId);
+    closeDialog(dialogId);
   };
 
   const handleSideSelected = (
@@ -296,8 +305,9 @@ export const ScanBusinessCardModal = ({
 
     try {
       await attachCardImages(existingPersonId);
-      enqueueSuccessSnackBar({
-        message: t`Business card images attached`,
+      enqueueToast({
+        variant: 'success',
+        children: t`Business card images attached`,
       });
       handleClose();
     } catch (attachError) {
@@ -306,7 +316,7 @@ export const ScanBusinessCardModal = ({
           ? attachError.message
           : t`Failed to attach business card`;
       setError(message);
-      enqueueErrorSnackBar({ message });
+      enqueueToast({ variant: 'error', children: message });
     } finally {
       setIsWorking(false);
     }
@@ -330,7 +340,8 @@ export const ScanBusinessCardModal = ({
         isAttachingToExisting
           ? {
               emptyFieldsOnly: true,
-              existingPerson: existingPerson,
+              existingPerson:
+                existingPerson as ExistingPersonForBusinessCard | undefined,
             }
           : undefined,
       );
@@ -346,8 +357,9 @@ export const ScanBusinessCardModal = ({
 
         await attachCardImages(existingPersonId);
 
-        enqueueSuccessSnackBar({
-          message: t`Business card added to person`,
+        enqueueToast({
+          variant: 'success',
+          children: t`Business card added to person`,
         });
         handleClose();
         return;
@@ -361,8 +373,9 @@ export const ScanBusinessCardModal = ({
         await attachCardImages(personId);
       }
 
-      enqueueSuccessSnackBar({
-        message: t`Person created from business card`,
+      enqueueToast({
+        variant: 'success',
+        children: t`Person created from business card`,
       });
       handleClose();
     } catch (saveError) {
@@ -373,227 +386,240 @@ export const ScanBusinessCardModal = ({
             ? t`Failed to update person`
             : t`Failed to create person`;
       setError(message);
-      enqueueErrorSnackBar({ message });
+      enqueueToast({ variant: 'error', children: message });
     } finally {
       setIsWorking(false);
     }
   };
 
   return (
-    <ModalStatefulWrapper
-      modalInstanceId={modalInstanceId}
-      size="medium"
-      padding="large"
-      isClosable
+    <DialogInstance
+      dialogId={dialogId}
+      dismissible={!isWorking}
       onClose={reset}
       renderInDocumentBody
-      autoHeight
     >
-      <H2Title
-        title={
-          isAttachingToExisting
-            ? t`Add business card`
-            : t`Scan business card`
-        }
-      />
-      <StyledBody>
-        {step === 'upload' ? (
-          <>
-            <StyledHint>
-              {isAttachingToExisting
-                ? t`Upload front and optional back photos. Attach them to this person, or scan to fill empty contact fields.`
-                : t`Upload front and optional back photos (PNG, JPEG, or WebP). We extract contact details for review, then save the card images on the person.`}
-            </StyledHint>
-            <StyledHiddenFileInput
-              ref={frontInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/*"
-              capture="environment"
-              disabled={isWorking}
-              onChange={(event) => handleSideSelected('front', event)}
-            />
-            <StyledHiddenFileInput
-              ref={backInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/*"
-              capture="environment"
-              disabled={isWorking}
-              onChange={(event) => handleSideSelected('back', event)}
-            />
-            <StyledSides>
-              <StyledSide>
-                <StyledSideTitle>{t`Front`}</StyledSideTitle>
-                {isDefined(frontPreviewUrl) ? (
-                  <StyledPreview src={frontPreviewUrl} alt={t`Front`} />
-                ) : (
-                  <StyledPreviewPlaceholder>
-                    {t`Required`}
-                  </StyledPreviewPlaceholder>
-                )}
-                <Button
-                  Icon={IconUpload}
-                  title={
-                    isDefined(frontFile) ? t`Replace front` : t`Add front`
-                  }
-                  variant="secondary"
-                  disabled={isWorking}
-                  onClick={() => frontInputRef.current?.click()}
-                />
-              </StyledSide>
-              <StyledSide>
-                <StyledSideTitle>{t`Back`}</StyledSideTitle>
-                {isDefined(backPreviewUrl) ? (
-                  <StyledPreview src={backPreviewUrl} alt={t`Back`} />
-                ) : (
-                  <StyledPreviewPlaceholder>
-                    {t`Optional`}
-                  </StyledPreviewPlaceholder>
-                )}
-                <Button
-                  Icon={IconUpload}
-                  title={isDefined(backFile) ? t`Replace back` : t`Add back`}
-                  variant="secondary"
-                  disabled={isWorking}
-                  onClick={() => backInputRef.current?.click()}
-                />
-              </StyledSide>
-            </StyledSides>
-            <Button
-              title={isWorking ? t`Scanning…` : t`Scan card fields`}
-              accent="blue"
-              disabled={isWorking || !isDefined(frontFile)}
-              onClick={() => {
-                void handleScan();
-              }}
-            />
-            {isAttachingToExisting ? (
+      {({ container, backdrop, viewportProps, onKeyDown }) => (
+        <Dialog.Popup
+          {...{ container, backdrop, viewportProps, onKeyDown }}
+          size="md"
+          data-globally-prevent-click-outside
+          style={{
+            padding: 'var(--t-spacing-6)',
+            borderRadius: 'var(--t-spacing-1)',
+          }}
+        >
+          <Dialog.Title>
+            {isAttachingToExisting
+              ? t`Add business card`
+              : t`Scan business card`}
+          </Dialog.Title>
+          <Dialog.Body>
+            <StyledBody>
+              {step === 'upload' ? (
+                <>
+                  <StyledHint>
+                    {isAttachingToExisting
+                      ? t`Upload front and optional back photos. Attach them to this person, or scan to fill empty contact fields.`
+                      : t`Upload front and optional back photos, then scan to create a person.`}
+                  </StyledHint>
+                  <StyledHiddenFileInput
+                    ref={frontInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={isWorking}
+                    onChange={(event) => handleSideSelected('front', event)}
+                  />
+                  <StyledHiddenFileInput
+                    ref={backInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={isWorking}
+                    onChange={(event) => handleSideSelected('back', event)}
+                  />
+                  <StyledSides>
+                    <StyledSide>
+                      <StyledSideTitle>{t`Front`}</StyledSideTitle>
+                      {isDefined(frontPreviewUrl) ? (
+                        <StyledPreview
+                          src={frontPreviewUrl}
+                          alt={t`Front`}
+                        />
+                      ) : (
+                        <StyledPreviewPlaceholder>
+                          {t`Required`}
+                        </StyledPreviewPlaceholder>
+                      )}
+                      <Button
+                        startIcon={<IconUpload />}
+                        variant="outline"
+                        disabled={isWorking}
+                        onClick={() => frontInputRef.current?.click()}
+                      >
+                        {isDefined(frontFile)
+                          ? t`Replace front`
+                          : t`Add front`}
+                      </Button>
+                    </StyledSide>
+                    <StyledSide>
+                      <StyledSideTitle>{t`Back`}</StyledSideTitle>
+                      {isDefined(backPreviewUrl) ? (
+                        <StyledPreview src={backPreviewUrl} alt={t`Back`} />
+                      ) : (
+                        <StyledPreviewPlaceholder>
+                          {t`Optional`}
+                        </StyledPreviewPlaceholder>
+                      )}
+                      <Button
+                        startIcon={<IconUpload />}
+                        variant="outline"
+                        disabled={isWorking}
+                        onClick={() => backInputRef.current?.click()}
+                      >
+                        {isDefined(backFile) ? t`Replace back` : t`Add back`}
+                      </Button>
+                    </StyledSide>
+                  </StyledSides>
+                  <Button
+                    color="accent"
+                    disabled={isWorking || !isDefined(frontFile)}
+                    onClick={() => {
+                      void handleScan();
+                    }}
+                  >
+                    {isWorking ? t`Scanning…` : t`Scan card fields`}
+                  </Button>
+                  {isAttachingToExisting ? (
+                    <Button
+                      variant="outline"
+                      disabled={isWorking || !isDefined(frontFile)}
+                      onClick={() => {
+                        void handleAttachOnly();
+                      }}
+                    >
+                      {isWorking ? t`Attaching…` : t`Attach images only`}
+                    </Button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {draft.warnings.map((warning) => (
+                    <StyledWarning key={warning}>{warning}</StyledWarning>
+                  ))}
+                  {isAttachingToExisting ? (
+                    <StyledHint>
+                      {t`Only empty fields on this person will be filled. Existing values are kept.`}
+                    </StyledHint>
+                  ) : null}
+                  <TextInput
+                    label={t`First name`}
+                    value={draft.firstName}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, firstName: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Last name`}
+                    value={draft.lastName}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, lastName: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Job title`}
+                    value={draft.jobTitle}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, jobTitle: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Email`}
+                    value={draft.email}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, email: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Phone`}
+                    value={draft.phone}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, phone: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Website`}
+                    value={draft.website}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({ ...current, website: value }))
+                    }
+                  />
+                  <TextInput
+                    label={t`Company`}
+                    value={draft.companyName}
+                    fullWidth
+                    onChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        companyName: value,
+                        companyId: null,
+                      }))
+                    }
+                    disabled={isNonEmptyString(draft.companyId)}
+                  />
+                  {isNonEmptyString(draft.companyId) ? (
+                    <StyledHint>
+                      {t`Matched or created company will be linked to this person.`}
+                    </StyledHint>
+                  ) : null}
+                  <StyledHint>
+                    {t`Card images will be saved as attachments on this person.`}
+                  </StyledHint>
+                  <Button
+                    variant="outline"
+                    disabled={isWorking}
+                    onClick={() => {
+                      setStep('upload');
+                      setDraft(emptyDraft());
+                      setError(null);
+                    }}
+                  >
+                    {t`Scan another card`}
+                  </Button>
+                </>
+              )}
+              {error ? <StyledError>{error}</StyledError> : null}
+            </StyledBody>
+            <StyledActions>
               <Button
-                title={
-                  isWorking ? t`Attaching…` : t`Attach images only`
-                }
-                variant="secondary"
-                disabled={isWorking || !isDefined(frontFile)}
-                onClick={() => {
-                  void handleAttachOnly();
-                }}
-              />
-            ) : null}
-          </>
-        ) : (
-          <>
-            {draft.warnings.map((warning) => (
-              <StyledWarning key={warning}>{warning}</StyledWarning>
-            ))}
-            {isAttachingToExisting ? (
-              <StyledHint>
-                {t`Only empty fields on this person will be filled. Existing values are kept.`}
-              </StyledHint>
-            ) : null}
-            <TextInput
-              label={t`First name`}
-              value={draft.firstName}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, firstName: value }))
-              }
-            />
-            <TextInput
-              label={t`Last name`}
-              value={draft.lastName}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, lastName: value }))
-              }
-            />
-            <TextInput
-              label={t`Job title`}
-              value={draft.jobTitle}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, jobTitle: value }))
-              }
-            />
-            <TextInput
-              label={t`Email`}
-              value={draft.email}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, email: value }))
-              }
-            />
-            <TextInput
-              label={t`Phone`}
-              value={draft.phone}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, phone: value }))
-              }
-            />
-            <TextInput
-              label={t`Website`}
-              value={draft.website}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, website: value }))
-              }
-            />
-            <TextInput
-              label={t`Company`}
-              value={draft.companyName}
-              fullWidth
-              onChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  companyName: value,
-                  companyId: null,
-                }))
-              }
-              disabled={isNonEmptyString(draft.companyId)}
-            />
-            {isNonEmptyString(draft.companyId) ? (
-              <StyledHint>
-                {t`Matched or created company will be linked to this person.`}
-              </StyledHint>
-            ) : null}
-            <StyledHint>
-              {t`Card images will be saved as attachments on this person.`}
-            </StyledHint>
-            <Button
-              title={t`Scan another card`}
-              variant="secondary"
-              disabled={isWorking}
-              onClick={() => {
-                setStep('upload');
-                setDraft(emptyDraft());
-                setError(null);
-              }}
-            />
-          </>
-        )}
-        {error ? <StyledError>{error}</StyledError> : null}
-      </StyledBody>
-      <StyledActions>
-        <Button
-          title={t`Cancel`}
-          onClick={handleClose}
-          disabled={isWorking}
-          variant="secondary"
-        />
-        {step === 'review' ? (
-          <Button
-            title={
-              isAttachingToExisting
-                ? t`Save to person`
-                : t`Create person`
-            }
-            onClick={() => {
-              void handleSave();
-            }}
-            disabled={isWorking}
-            accent="blue"
-          />
-        ) : null}
-      </StyledActions>
-    </ModalStatefulWrapper>
+                onClick={handleClose}
+                disabled={isWorking}
+                variant="outline"
+              >
+                {t`Cancel`}
+              </Button>
+              {step === 'review' ? (
+                <Button
+                  onClick={() => {
+                    void handleSave();
+                  }}
+                  disabled={isWorking}
+                  color="accent"
+                >
+                  {isAttachingToExisting
+                    ? t`Save to person`
+                    : t`Create person`}
+                </Button>
+              ) : null}
+            </StyledActions>
+          </Dialog.Body>
+        </Dialog.Popup>
+      )}
+    </DialogInstance>
   );
 };

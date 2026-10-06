@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { msg } from '@lingui/core/macro';
 
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isNonEmptyString } from 'twenty-shared/utils';
 
 import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
 import {
@@ -84,7 +84,7 @@ export class PersonOwnershipService {
   applyOwnerIdOnCreateData<
     T extends { ownerId?: string | null; owner?: unknown },
   >(data: T, workspaceMemberId: string): T {
-    if (isDefined(data.ownerId) && data.ownerId.length > 0) {
+    if (isNonEmptyString(data.ownerId)) {
       return data;
     }
 
@@ -102,14 +102,19 @@ export class PersonOwnershipService {
     filter: PersonOwnerScopedFilter | undefined,
     workspaceMemberId: string,
   ): PersonOwnerScopedFilter {
-    const ownershipFilter = { ownerId: { eq: workspaceMemberId } };
+    const ownershipFilter: PersonOwnerScopedFilter = {
+      ownerId: { eq: workspaceMemberId },
+    };
 
-    if (!isDefined(filter) || Object.keys(filter).length === 0) {
+    if (
+      !isDefined(filter) ||
+      Object.keys(filter as Record<string, unknown>).length === 0
+    ) {
       return ownershipFilter;
     }
 
     return {
-      and: [filter, ownershipFilter],
+      and: [filter as Record<string, unknown>, ownershipFilter],
     };
   }
 

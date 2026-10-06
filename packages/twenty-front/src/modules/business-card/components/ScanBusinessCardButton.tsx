@@ -2,14 +2,14 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { IconPhotoUp } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { Button } from 'twenty-ui/primitives/input';
 
 import {
-  SCAN_BUSINESS_CARD_ATTACH_MODAL_ID,
-  SCAN_BUSINESS_CARD_MODAL_ID,
+  SCAN_BUSINESS_CARD_ATTACH_DIALOG_ID,
+  SCAN_BUSINESS_CARD_DIALOG_ID,
   ScanBusinessCardModal,
 } from '@/business-card/components/ScanBusinessCardModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 
 const StyledWrap = styled.div`
   display: inline-flex;
@@ -22,24 +22,23 @@ type ScanBusinessCardButtonProps = {
 export const ScanBusinessCardButton = ({
   existingPersonId,
 }: ScanBusinessCardButtonProps) => {
-  const { openModal } = useModal();
-  const modalInstanceId = isDefined(existingPersonId)
-    ? SCAN_BUSINESS_CARD_ATTACH_MODAL_ID
-    : SCAN_BUSINESS_CARD_MODAL_ID;
+  const { openDialog } = useDialog();
+  const dialogId = isDefined(existingPersonId)
+    ? SCAN_BUSINESS_CARD_ATTACH_DIALOG_ID
+    : SCAN_BUSINESS_CARD_DIALOG_ID;
 
   return (
     <StyledWrap>
       <Button
-        Icon={IconPhotoUp}
-        title={
-          isDefined(existingPersonId) ? t`Add card` : t`Scan card`
-        }
-        variant="secondary"
-        size="small"
-        onClick={() => openModal(modalInstanceId)}
-      />
+        startIcon={<IconPhotoUp />}
+        variant="outline"
+        size="sm"
+        onClick={() => openDialog(dialogId)}
+      >
+        {isDefined(existingPersonId) ? t`Add card` : t`Scan card`}
+      </Button>
       <ScanBusinessCardModal
-        modalInstanceId={modalInstanceId}
+        dialogId={dialogId}
         existingPersonId={existingPersonId}
       />
     </StyledWrap>
