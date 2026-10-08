@@ -1,13 +1,17 @@
-# Twenty Mobile (Expo)
+# Arcloops CRM Mobile (Expo)
 
-Full Expo (managed) client against our self-hosted Twenty CRM — password + Microsoft/Google AuthSession, CRM core, views, activities, business-card People scan, Settings (profile / experience / accounts / members / API keys / roles / billing), dashboards, workflows, and EAS store-ready config.
+Standalone Expo (managed) client for our self-hosted CRM — password + Microsoft/Google AuthSession, CRM core, views, activities, business-card People scan, Settings, dashboards, workflows, and EAS store builds.
+
+**Not part of the Twenty Yarn monorepo.** Own `package-lock.json` + npm; EAS uses Node 22. See [commands.md](../../commands.md).
 
 **Live API / app:** [https://crm.arcloops.io](https://crm.arcloops.io)
 
 **Architecture & phases:** see [ARCHITECTURE.md](./ARCHITECTURE.md) (Phases 0–8 done MVP).
 
 ```bash
-yarn workspace twenty-mobile start
+cd packages/twenty-mobile
+npm install
+npm start
 ```
 
 ## Architecture (keep this mental model)
@@ -122,7 +126,7 @@ Fine for smoke tests. Prefer **user login tokens** for a real multi-user mobile 
 2. Env: `EXPO_PUBLIC_TWENTY_API_URL=https://crm.arcloops.io`
 3. Login screen → `expo-secure-store` tokens → token refresh helper.
 4. One Core query (e.g. companies list) on `/graphql`.
-5. Then product UI (tabs, record detail, etc.).
+5. Product UI: drawer + tabs **Home · People · Pipeline · Tasks**, header menu/Search, FAB for New/Scan.
 6. Ship with **EAS Build / Submit** (Phase 8 — see below).
 
 ## Phase 8 — Admin + store release
@@ -141,25 +145,15 @@ Create / revoke keys and edit roles stay on web.
 
 ### EAS Build / Submit
 
+Standalone npm app — run everything from this directory (`eas.json` uses Node **22.14.0**).
+
 ```bash
 cd packages/twenty-mobile
-
-# One-time: link Expo project (fills EXPO_PUBLIC_EAS_PROJECT_ID)
-eas init
-
-# Internal / TestFlight-style preview
-eas build --profile preview --platform ios
-eas build --profile preview --platform android
-
-# Store binaries
-eas build --profile production --platform all
-
-# Submit needs your Apple Developer / Play Console credentials (out of band)
-eas submit --profile production --platform ios
-eas submit --profile production --platform android
+npm run build:ios    # production → App Store / TestFlight
+npm run submit:ios
 ```
 
-Profiles live in `eas.json` (`development` = Dev Client, `preview` = internal, `production` = store). Do **not** commit Apple/Google secrets.
+Profiles: `development` / `preview` / `production`. Do **not** commit Apple/Google secrets.
 
 ### Env vars (store)
 
@@ -198,29 +192,25 @@ Run against a simulator/emulator with a preview or local Dev Client build.
 
 Still web-first: data-model editor, workflow builder, dense TABLE, admin impersonation, spreadsheet import, chart builder, push until device-token API.
 
-## Run locally (Phase 0 + 1)
+## Run locally on iOS
+
+**Prereqs:** Xcode (Simulator), Node **≥ 20**, `npm install` in this folder. Env: `.env` (gitignored).
 
 ```bash
-# from repo root (after yarn install)
-yarn workspace twenty-mobile start
-# or
-cd packages/twenty-mobile && yarn start
+cd packages/twenty-mobile
+npm start          # press `i` for Simulator, or scan QR for Expo Go
+npm run ios        # one-shot Simulator
 ```
 
-Then open iOS Simulator, Android emulator, or Expo Go / Dev Client. Sign in with a workspace email/password against `EXPO_PUBLIC_TWENTY_API_URL`.
+Sign in with workspace **email/password** against `EXPO_PUBLIC_TWENTY_API_URL` (`https://crm-api.arcloops.io`).
 
-Env file: `packages/twenty-mobile/.env` (gitignored).
+Branding: [`assets/README.md`](./assets/README.md). Store / TestFlight: [commands.md](../../commands.md).
+
 ### Sanity checks before coding screens
 
 ```bash
-# Should return JSON (not the SPA HTML)
-curl -sS https://crm.arcloops.io/client-config | head
-
-# With an API key from Settings → API & Webhooks
-curl -sS -X POST https://crm.arcloops.io/graphql \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ companies(first: 3) { edges { node { id name } } } }"}'
+# Must be JSON from the API host (not SPA HTML)
+curl -sS https://crm-api.arcloops.io/client-config | head
 ```
 
 If `/graphql` or `/metadata` return HTML/404, the reverse proxy is not routing API paths — fix infra before the app.

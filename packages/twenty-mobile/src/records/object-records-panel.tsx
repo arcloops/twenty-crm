@@ -73,60 +73,32 @@ export const ObjectRecordsPanel = ({
   } = useRecordList(objectMetadata, isKanban ? undefined : gqlVariables);
 
   useLayoutEffect(() => {
-    if (!showHeaderActions) {
-      return;
-    }
+    const title =
+      namePlural === 'opportunities'
+        ? 'Pipeline'
+        : (objectMetadata?.labelPlural ?? namePlural);
 
     navigation.setOptions({
-      title: objectMetadata?.labelPlural ?? namePlural,
-      headerRight: () => (
-        <View style={styles.headerActions}>
-          {namePlural === 'people' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Scan business card"
-              hitSlop={8}
-              style={styles.headerAction}
-              onPress={() => router.push('/(app)/people/scan-card')}
-            >
-              <Text style={{ color: theme.accent.primary, fontWeight: '600' }}>
-                Scan
-              </Text>
-            </Pressable>
-          ) : null}
-          {objectMetadata ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`New ${objectMetadata.labelSingular}`}
-              hitSlop={8}
-              style={styles.headerAction}
-              onPress={() =>
-                router.push({
-                  pathname: '/(app)/object/[singular]/new',
-                  params: { singular: objectMetadata.nameSingular },
-                })
-              }
-            >
-              <Text style={{ color: theme.accent.primary, fontWeight: '600' }}>
-                New
-              </Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-            hitSlop={10}
-            style={styles.headerAction}
-            onPress={() => router.push('/(app)/settings')}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={22}
-              color={theme.accent.primary}
-            />
-          </Pressable>
-        </View>
-      ),
+      title,
+      ...(showHeaderActions
+        ? {
+            headerRight: () => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Search"
+                hitSlop={10}
+                style={styles.headerAction}
+                onPress={() => router.push('/(app)/search')}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={22}
+                  color={theme.accent.primary}
+                />
+              </Pressable>
+            ),
+          }
+        : {}),
     });
   }, [
     namePlural,
@@ -210,7 +182,14 @@ export const ObjectRecordsPanel = ({
             !isLoading ? (
               <EmptyState
                 title={`No ${objectMetadata.labelPlural.toLowerCase()}`}
-                description="Create a record to get started."
+                description={`Add your first ${objectMetadata.labelSingular.toLowerCase()} to get started.`}
+                actionLabel={`Add ${objectMetadata.labelSingular.toLowerCase()}`}
+                onAction={() =>
+                  router.push({
+                    pathname: '/(app)/object/[singular]/new',
+                    params: { singular: objectMetadata.nameSingular },
+                  })
+                }
               />
             ) : null
           }
@@ -241,14 +220,9 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingBottom: 0, gap: spacing(2) },
   meta: { marginBottom: 0 },
   listFlex: { flex: 1 },
-  list: { gap: spacing(2), paddingBottom: spacing(8) },
-  headerActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing(1),
-    marginRight: spacing(1),
-  },
+  list: { gap: spacing(2), paddingBottom: spacing(20) },
   headerAction: {
+    marginRight: spacing(3),
     paddingHorizontal: spacing(1),
     paddingVertical: spacing(1),
   },

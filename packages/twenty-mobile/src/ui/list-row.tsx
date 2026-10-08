@@ -10,6 +10,7 @@ type ListRowProps = {
   subtitle?: string;
   onPress?: () => void;
   rightLabel?: string;
+  rightLabelTone?: 'default' | 'danger' | 'accent';
   showChevron?: boolean;
   testID?: string;
 };
@@ -19,10 +20,17 @@ export const ListRow = ({
   subtitle,
   onPress,
   rightLabel,
+  rightLabelTone = 'default',
   showChevron = true,
   testID,
 }: ListRowProps) => {
   const theme = useTheme();
+  const rightLabelColor =
+    rightLabelTone === 'danger'
+      ? theme.text.danger
+      : rightLabelTone === 'accent'
+        ? theme.accent.primary
+        : theme.text.tertiary;
 
   return (
     <Pressable
@@ -54,7 +62,9 @@ export const ListRow = ({
         ) : null}
       </View>
       {rightLabel ? (
-        <Text style={{ color: theme.text.tertiary }}>{rightLabel}</Text>
+        <Text style={{ color: rightLabelColor, fontWeight: '600' }}>
+          {rightLabel}
+        </Text>
       ) : null}
       {showChevron && onPress ? (
         <Ionicons

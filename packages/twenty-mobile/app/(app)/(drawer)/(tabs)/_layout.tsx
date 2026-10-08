@@ -1,87 +1,102 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs, router, useNavigation } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Tabs } from 'expo-router';
+import { Platform, StyleSheet, type ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  HeaderActions,
+  HeaderMenuButton,
+} from '@/navigation/app-chrome';
 import { useTheme } from '@/ui';
+import { spacing } from '@/ui/theme';
 
-type DrawerParentNavigation = {
-  openDrawer?: () => void;
+type TabIconProps = {
+  focused: boolean;
+  color: ColorValue;
+  size: number;
+  outline: keyof typeof Ionicons.glyphMap;
+  filled: keyof typeof Ionicons.glyphMap;
 };
 
-const MenuButton = () => {
-  const theme = useTheme();
-  const navigation = useNavigation();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Open menu"
-      hitSlop={10}
-      style={{ marginLeft: 8, padding: 4 }}
-      onPress={() => {
-        let current:
-          | (DrawerParentNavigation & {
-              getParent?: () => DrawerParentNavigation | undefined;
-            })
-          | undefined = navigation as DrawerParentNavigation & {
-          getParent?: () => DrawerParentNavigation | undefined;
-        };
-
-        while (current) {
-          if (typeof current.openDrawer === 'function') {
-            current.openDrawer();
-            return;
-          }
-          current = current.getParent?.();
-        }
-      }}
-    >
-      <Ionicons name="menu-outline" size={24} color={theme.text.primary} />
-    </Pressable>
-  );
-};
+const TabIcon = ({
+  focused,
+  color,
+  size,
+  outline,
+  filled,
+}: TabIconProps) => (
+  <Ionicons
+    name={focused ? filled : outline}
+    color={typeof color === 'string' ? color : undefined}
+    size={size}
+  />
+);
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 56 + Math.max(insets.bottom, spacing(1));
 
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
+        headerShadowVisible: false,
+        headerTitleAlign: 'center',
+        headerStyle: {
+          backgroundColor: theme.background.primary,
+          borderBottomColor: theme.border.primary,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+        },
+        headerTitleStyle: {
+          color: theme.text.primary,
+          fontSize: 17,
+          fontWeight: '700',
+        },
+        headerTintColor: theme.text.primary,
+        headerLeft: () => <HeaderMenuButton />,
+        headerLeftContainerStyle: {
+          paddingLeft: spacing(1),
+        },
+        headerRight: () => <HeaderActions />,
         tabBarActiveTintColor: theme.accent.primary,
         tabBarInactiveTintColor: theme.text.tertiary,
+        tabBarHideOnKeyboard: true,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 4,
+        },
+        tabBarItemStyle: {
+          paddingTop: spacing(1),
+        },
         tabBarStyle: {
           backgroundColor: theme.background.primary,
           borderTopColor: theme.border.primary,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 8,
+          height: tabBarHeight,
+          paddingBottom: Math.max(insets.bottom, spacing(1)),
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: theme.name === 'dark' ? 0.25 : 0.06,
+          shadowRadius: 8,
         },
-        headerStyle: {
-          backgroundColor: theme.background.primary,
-        },
-        headerTintColor: theme.text.primary,
-        headerLeft: () => <MenuButton />,
-        headerRight: () => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-            hitSlop={10}
-            style={{ marginRight: 12 }}
-            onPress={() => router.push('/(app)/settings')}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={22}
-              color={theme.accent.primary}
-            />
-          </Pressable>
-        ),
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" color={color} size={size} />
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon
+              focused={focused}
+              color={color}
+              size={size}
+              outline="home-outline"
+              filled="home"
+            />
           ),
         }}
       />
@@ -89,17 +104,15 @@ export default function TabsLayout() {
         name="people"
         options={{
           title: 'People',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="companies"
-        options={{
-          title: 'Companies',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="business-outline" color={color} size={size} />
+          tabBarLabel: 'People',
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon
+              focused={focused}
+              color={color}
+              size={size}
+              outline="people-outline"
+              filled="people"
+            />
           ),
         }}
       />
@@ -107,18 +120,39 @@ export default function TabsLayout() {
         name="opportunities"
         options={{
           title: 'Pipeline',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up-outline" color={color} size={size} />
+          tabBarLabel: 'Pipeline',
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon
+              focused={focused}
+              color={color}
+              size={size}
+              outline="trending-up-outline"
+              filled="trending-up"
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="search"
+        name="tasks"
         options={{
-          title: 'Search',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" color={color} size={size} />
+          title: 'Tasks',
+          tabBarLabel: 'Tasks',
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon
+              focused={focused}
+              color={color}
+              size={size}
+              outline="checkbox-outline"
+              filled="checkbox"
+            />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          href: null,
+          title: 'Browse',
         }}
       />
     </Tabs>

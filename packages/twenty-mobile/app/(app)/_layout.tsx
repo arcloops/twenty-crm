@@ -2,13 +2,39 @@ import { Redirect, Stack } from 'expo-router';
 
 import { useAuth } from '@/auth/auth-context';
 import { ObjectsMetadataProvider } from '@/metadata/objects-provider';
-import { Spinner } from '@/ui';
+import { Spinner, useTheme } from '@/ui';
 
 const AuthenticatedApp = () => {
+  const theme = useTheme();
+
   return (
     <ObjectsMetadataProvider>
-      <Stack>
+      <Stack
+        screenOptions={{
+          headerShadowVisible: false,
+          headerStyle: {
+            backgroundColor: theme.background.primary,
+          },
+          headerTitleStyle: {
+            color: theme.text.primary,
+            fontSize: 17,
+            fontWeight: '700',
+          },
+          headerTintColor: theme.accent.primary,
+          contentStyle: {
+            backgroundColor: theme.background.primary,
+          },
+        }}
+      >
         <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="search"
+          options={{ title: 'Search', headerBackTitle: 'Back', presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="companies"
+          options={{ title: 'Companies', headerBackTitle: 'Back' }}
+        />
         <Stack.Screen
           name="objects/[plural]"
           options={{ title: 'Records', headerBackTitle: 'Back' }}
@@ -27,7 +53,7 @@ const AuthenticatedApp = () => {
         />
         <Stack.Screen
           name="settings/index"
-          options={{ title: 'Settings', headerBackTitle: 'Home' }}
+          options={{ title: 'Settings', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="settings/profile"
@@ -59,7 +85,7 @@ const AuthenticatedApp = () => {
         />
         <Stack.Screen
           name="dashboards/index"
-          options={{ title: 'Dashboards', headerBackTitle: 'Settings' }}
+          options={{ title: 'Dashboards', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="dashboards/[id]"
@@ -67,7 +93,7 @@ const AuthenticatedApp = () => {
         />
         <Stack.Screen
           name="workflows/index"
-          options={{ title: 'Workflows', headerBackTitle: 'Settings' }}
+          options={{ title: 'Workflows', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="workflows/[id]"

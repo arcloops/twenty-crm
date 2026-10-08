@@ -1,14 +1,21 @@
 {
-  "name": "twenty-mobile",
-  "version": "0.1.0",
+  "name": "arcloops-crm-mobile",
+  "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "ios:device": "expo run:ios --device",
+    "ios:prebuild": "expo prebuild --platform ios --clean",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ios": "eas build --profile production --platform ios",
+    "submit:ios": "eas submit --profile production --platform ios"
   },
   "dependencies": {
     "@apollo/client": "^3.13.8",
@@ -16,8 +23,6 @@
     "@lingui/core": "^5.9.5",
     "@lingui/react": "^5.9.5",
     "@react-native-community/netinfo": "11.4.1",
-    "@react-navigation/drawer": "^7.14.3",
-    "@react-navigation/native": "^7.5.0",
     "expo": "~57.0.26",
     "expo-application": "~7.0.8",
     "expo-auth-session": "~57.0.7",
@@ -40,7 +45,6 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-drawer-layout": "^4.2.11",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",

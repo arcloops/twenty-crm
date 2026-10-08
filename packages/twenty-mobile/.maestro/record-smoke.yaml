@@ -1,9 +1,17 @@
-# Smoke: login → People tab → back to Home.
-appId: host.exp.Exponent
+# Smoke: login shell → People → Pipeline → Tasks → drawer → Home.
+# Prefer a Dev Client / USB build (appId io.arcloops.crm). Expo Go uses host.exp.Exponent.
+appId: io.arcloops.crm
 ---
 - launchApp
 - assertVisible: "Home"
 - tapOn: "People"
 - assertVisible: "People"
+- tapOn: "Pipeline"
+- assertVisible: "Pipeline"
+- tapOn: "Tasks"
+- assertVisible: "Tasks"
+- tapOn: "Open menu"
+- assertVisible: "Arcloops CRM"
+- assertVisible: "Settings"
 - tapOn: "Home"
 - assertVisible: "Home"

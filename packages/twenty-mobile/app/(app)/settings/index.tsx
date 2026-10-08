@@ -5,7 +5,6 @@ import { router, useNavigation } from 'expo-router';
 import {
   hasApiKeysPermission,
   hasRolesPermission,
-  hasWorkflowsPermission,
   hasWorkspaceMembersPermission,
   hasWorkspacePermission,
   useAuth,
@@ -24,7 +23,6 @@ export default function SettingsIndexScreen() {
   const canViewApiKeys = hasApiKeysPermission(user);
   const canViewRoles = hasRolesPermission(user);
   const canViewMembers = hasWorkspaceMembersPermission(user);
-  const canViewWorkflows = hasWorkflowsPermission(user);
   const canViewBilling = isBillingEnabled && hasWorkspacePermission(user);
 
   useLayoutEffect(() => {
@@ -49,6 +47,7 @@ export default function SettingsIndexScreen() {
         </Text>
       </View>
 
+      <SectionLabel label={t('You')} />
       <ListRow
         title={t('Profile')}
         subtitle={t('Name and email')}
@@ -64,6 +63,10 @@ export default function SettingsIndexScreen() {
         subtitle={t('Email and calendar providers')}
         onPress={() => router.push('/(app)/settings/accounts')}
       />
+
+      {(canViewMembers || canViewRoles || canViewBilling) && (
+        <SectionLabel label={t('Workspace')} />
+      )}
       {canViewMembers ? (
         <ListRow
           title={t('Members')}
@@ -82,13 +85,6 @@ export default function SettingsIndexScreen() {
           onPress={() => router.push('/(app)/settings/roles')}
         />
       ) : null}
-      {canViewApiKeys ? (
-        <ListRow
-          title={t('API keys')}
-          subtitle={t('View keys · manage on web')}
-          onPress={() => router.push('/(app)/settings/api-keys')}
-        />
-      ) : null}
       {canViewBilling ? (
         <ListRow
           title={t('Billing')}
@@ -99,17 +95,16 @@ export default function SettingsIndexScreen() {
           onPress={() => router.push('/(app)/settings/billing')}
         />
       ) : null}
-      <ListRow
-        title={t('Dashboards')}
-        subtitle={t('Read KPIs')}
-        onPress={() => router.push('/(app)/dashboards')}
-      />
-      {canViewWorkflows ? (
-        <ListRow
-          title={t('Workflows')}
-          subtitle={t('Runs and manual trigger')}
-          onPress={() => router.push('/(app)/workflows')}
-        />
+
+      {canViewApiKeys ? (
+        <>
+          <SectionLabel label={t('Advanced')} />
+          <ListRow
+            title={t('API keys')}
+            subtitle={t('View keys · manage on web')}
+            onPress={() => router.push('/(app)/settings/api-keys')}
+          />
+        </>
       ) : null}
 
       <View style={styles.signOut}>
@@ -125,6 +120,16 @@ export default function SettingsIndexScreen() {
   );
 }
 
+const SectionLabel = ({ label }: { label: string }) => {
+  const theme = useTheme();
+
+  return (
+    <Text style={[styles.sectionLabel, { color: theme.text.tertiary }]}>
+      {label}
+    </Text>
+  );
+};
+
 const styles = StyleSheet.create({
   header: {
     gap: spacing(0.5),
@@ -133,6 +138,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    marginBottom: spacing(1),
+    marginTop: spacing(4),
+    textTransform: 'uppercase',
   },
   signOut: {
     marginTop: spacing(6),

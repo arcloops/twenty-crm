@@ -4,21 +4,18 @@ import { join } from 'node:path';
 import { type ConfigContext } from 'expo/config';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
-const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+// Public Expo project id — hardcoded so `eas` can link without writing dynamic config
+const EAS_PROJECT_ID = '5821493b-0911-4b52-9f15-b8e241e40f8f';
+const easProjectId =
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim() || EAS_PROJECT_ID;
 const privacyPolicyUrl =
   process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() ||
-  'https://twenty.com/legal/privacy';
-
-const mobilePackageJson = join(
-  process.cwd().endsWith('twenty-mobile')
-    ? process.cwd()
-    : join(process.cwd(), 'packages/twenty-mobile'),
-  'package.json',
-);
+  'https://www.arcloops.ai/privacy';
 
 const isSentryPackageInstalled = (): boolean => {
   try {
-    createRequire(mobilePackageJson).resolve(
+    // Always run Expo / EAS from this package directory
+    createRequire(join(process.cwd(), 'package.json')).resolve(
       '@sentry/react-native/package.json',
     );
     return true;
@@ -60,20 +57,33 @@ export default ({ config }: ConfigContext) => {
     ...config,
     name: 'Arcloops CRM',
     slug: 'twenty-mobile',
-    version: '0.1.0',
+    version: '1.0.0',
     orientation: 'portrait' as const,
     icon: './assets/images/icon.png',
     scheme: 'twenty',
     userInterfaceStyle: 'automatic' as const,
+    primaryColor: '#38393B',
     splash: {
       image: './assets/images/splash-icon.png',
       resizeMode: 'contain' as const,
-      backgroundColor: '#fcfcfc',
+      backgroundColor: '#38393B',
     },
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'io.arcloops.crm',
+      config: {
+        usesNonExemptEncryption: false,
+      },
       infoPlist: {
+        CADisableMinimumFrameDurationOnPhone: true,
+        ITSAppUsesNonExemptEncryption: false,
+        UISupportedInterfaceOrientations: [
+          'UIInterfaceOrientationPortrait',
+        ],
+        'UISupportedInterfaceOrientations~ipad': [
+          'UIInterfaceOrientationPortrait',
+          'UIInterfaceOrientationPortraitUpsideDown',
+        ],
         NSCameraUsageDescription:
           'Photograph front and back of business cards to create People.',
         NSPhotoLibraryUsageDescription:
@@ -84,16 +94,29 @@ export default ({ config }: ConfigContext) => {
           },
         ],
       },
+      privacyManifests: {
+        NSPrivacyAccessedAPITypes: [
+          {
+            NSPrivacyAccessedAPIType:
+              'NSPrivacyAccessedAPICategoryUserDefaults',
+            NSPrivacyAccessedAPITypeReasons: ['CA92.1'],
+          },
+        ],
+      },
     },
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/images/android-icon-foreground.png',
         backgroundImage: './assets/images/android-icon-background.png',
         monochromeImage: './assets/images/android-icon-monochrome.png',
-        backgroundColor: '#fcfcfc',
+        backgroundColor: '#38393B',
       },
       package: 'io.arcloops.crm',
       permissions: ['CAMERA', 'READ_MEDIA_IMAGES'],
+      blockedPermissions: [
+        'android.permission.READ_MEDIA_VIDEO',
+        'android.permission.READ_MEDIA_AUDIO',
+      ],
       intentFilters: [
         {
           action: 'VIEW',
@@ -124,7 +147,7 @@ export default ({ config }: ConfigContext) => {
         process.env.EXPO_PUBLIC_TWENTY_ORIGIN ?? 'https://crm.arcloops.io',
       privacyPolicyUrl,
       eas: {
-        projectId: easProjectId || undefined,
+        projectId: easProjectId,
       },
     },
   };

@@ -1,15 +1,23 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { Button } from '@/ui/button';
 import { useTheme } from '@/ui/theme-provider';
 import { spacing } from '@/ui/theme';
 
 type EmptyStateProps = {
   title: string;
   description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
-export const EmptyState = ({ title, description }: EmptyStateProps) => {
+export const EmptyState = ({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: EmptyStateProps) => {
   const theme = useTheme();
 
   return (
@@ -19,6 +27,11 @@ export const EmptyState = ({ title, description }: EmptyStateProps) => {
         <Text style={[styles.description, { color: theme.text.secondary }]}>
           {description}
         </Text>
+      ) : null}
+      {actionLabel && onAction ? (
+        <View style={styles.action}>
+          <Button label={actionLabel} onPress={onAction} />
+        </View>
       ) : null}
     </View>
   );
@@ -38,5 +51,9 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  action: {
+    marginTop: spacing(2),
+    minWidth: 180,
   },
 });

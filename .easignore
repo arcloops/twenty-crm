@@ -1,0 +1,32 @@
+# Standalone Arcloops mobile app lives in packages/twenty-mobile (npm).
+# Upload only what that app needs — not the Twenty yarn monorepo.
+**/**/.env
+.DS_Store
+**/**/node_modules/
+.cache
+.nx/
+.pnp.*
+.yarn/
+/yarn.lock
+/yarn.config.cjs
+/.yarnrc.yml
+/nx.json
+
+# Drop every package except twenty-mobile
+/packages/*
+!/packages/twenty-mobile/
+!/packages/twenty-mobile/**
+
+# Still drop heavy / non-runtime bits inside the mobile app
+/packages/twenty-mobile/assets/pack/
+/packages/twenty-mobile/assets/images/_backup-twenty-defaults/
+/packages/twenty-mobile/.maestro/
+/packages/twenty-mobile/node_modules/
+/packages/twenty-mobile/.expo/
+/packages/twenty-mobile/ios/
+/packages/twenty-mobile/android/
+
+/.github/
+/.vscode/
+/.cursor/
+/docs/

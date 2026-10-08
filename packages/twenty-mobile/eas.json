@@ -4,7 +4,14 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "22.14.0",
+      "ios": {
+        "image": "latest"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
@@ -15,21 +22,28 @@
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
-      "ios": {
-        "simulator": false
-      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "autoIncrement": true
+      "extends": "base",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_TWENTY_API_URL": "https://crm-api.arcloops.io",
+        "EXPO_PUBLIC_TWENTY_ORIGIN": "https://crm.arcloops.io",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://www.arcloops.ai/privacy",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "5821493b-0911-4b52-9f15-b8e241e40f8f"
+      }
     }
   },
   "submit": {
     "production": {
-      "ios": {},
+      "ios": {
+        "ascAppId": "6820139033"
+      },
       "android": {}
     }
   }

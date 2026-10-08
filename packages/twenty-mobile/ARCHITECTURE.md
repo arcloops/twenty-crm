@@ -29,14 +29,14 @@ Full architecture and phased delivery plan for `packages/twenty-mobile`: a **ful
 
 ## Current state
 
-`packages/twenty-mobile` is a full Expo (managed) app with password + Microsoft/Google AuthSession sign-in, connected accounts, metadata-driven CRM, saved views, attachments, activities, business-card People scan, read-only admin settings (API keys / roles / billing), KPI dashboards, workflow runs, and EAS/Maestro store-release scaffolding.
+`packages/twenty-mobile` is a full Expo (managed) app with password + Microsoft/Google AuthSession sign-in, connected accounts, metadata-driven CRM, saved views, attachments, activities, business-card People scan, read-only admin settings (API keys / roles / billing), KPI dashboards, workflow runs, and EAS/Maestro store-release scaffolding. Primary chrome is **Drawer + Tabs** (Home, People, Pipeline, Tasks) with a side menu for CRM/insights/settings, header menu + Search, and a FAB for create/scan.
 
 The web app already encodes the mobile product shape:
 
 | Concept | Location |
 |---------|----------|
 | Mobile home (`/home`) | [`AppPath.Home`](../twenty-shared/src/types/AppPath.ts), [`MobileHomePage`](../twenty-front/src/pages/mobile-home/MobileHomePage.tsx) |
-| Bottom bar | Home / Search / People (and other CRM tabs) |
+| Bottom bar | Home · People · Pipeline · Tasks (side drawer for More CRM / insights / settings; Search in header) |
 | Record list | `/objects/:objectNamePlural` |
 | Record detail | `/object/:objectNameSingular/:objectRecordId` |
 
@@ -204,12 +204,14 @@ Port tokens from `twenty-ui` (colors, spacing scale, radii, typography, light/da
 
 | Web concept | Mobile equivalent |
 |-------------|-------------------|
-| Navigation drawer + `/home` | Home tab = full nav menu page ([`MobileHomePage`](../twenty-front/src/pages/mobile-home/MobileHomePage.tsx)) |
-| Bottom bar Home / Search / CRM objects | Expo tabs for Home, Search, and core objects |
-| Record index (table/kanban/list) | Phase 1: LIST; later KANBAN / CALENDAR |
-| Record show (page-layout widgets) | Scroll stack of field card + widget sections |
-| Side panel search / actions | Full-screen Search + action sheets |
-| Cmd-K | Search + record actions menu |
+| Web drawer + `/home` | **Home Today** tab (tasks + pipeline snapshot); no hamburger drawer |
+| Bottom bar | Expo tabs: **Home · People · Pipeline · Tasks · More** |
+| Search | Header icon → modal Search (not a tab) |
+| More hub | Companies, Notes, Dashboards, Workflows, Settings |
+| Quick create | Floating **+** (New / Scan) |
+| Record index (table/kanban/list) | LIST + KANBAN via saved views |
+| Record show | Title + primary fields + bottom Log activity / Scan |
+| Cmd-K | Header Search + FAB / record actions |
 
 ### Visual rules
 
@@ -230,7 +232,7 @@ Port tokens from `twenty-ui` (colors, spacing scale, radii, typography, light/da
 | Views | `modules/views` | Load saved views; filters/sorts UI |
 | Activities | `modules/activities` + record widgets | Sections on record show |
 | Business card scan | People record index action | Document pick → OCR extract → create Person |
-| Nav | `navigation-menu-item` | Drive Home menu from API |
+| Nav | static `app-nav-config` | Drawer + Tabs; API-driven menu later |
 | Settings | `SettingsPath` user vs admin | Profile first; admin later |
 | Workflows / dashboards | nav + page-layout | Read/run after CRM core |
 | Accounts email/calendar | Settings → Accounts | Connect + widgets after Microsoft auth |
@@ -261,12 +263,12 @@ Each phase ends with a demoable build on device/simulator against `https://crm.a
 
 **Goal:** generic CRM on phone for any workspace object.
 
-- Fetch object metadata; render Home nav from workspace navigation menu items
+- Fetch object metadata; Home Today shows tasks + pipeline
 - Record index: LIST view for any object (People, Companies, Opportunities, custom)
-- Record show: identity + field renderer by field type (text, number, date, select, relation, links, emails, phones)
-- Create / update / soft-delete records
-- Global Search (record search) as tab
-- Bottom tabs: Home / Search / CRM objects
+- Record show: identity + field renderer by field type
+- Create / update / soft-delete records via FAB and forms
+- Global Search from header (modal)
+- Bottom tabs: Home · People · Pipeline · Tasks · More
 
 **Exit criteria:** browse any object, open a record, edit fields, create a company/person — parity with web’s core object UX on phone.
 
@@ -317,7 +319,7 @@ Each phase ends with a demoable build on device/simulator against `https://crm.a
 
 **Goal:** Capture contacts from card photos on People.
 
-- People list header Scan action
+- People Scan via FAB / record detail bottom action
 - Document/image pick → upload → server OCR extract → review → create Person
 
 **Exit criteria:** scan a card image and create a Person with extracted fields.

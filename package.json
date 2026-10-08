@@ -89,8 +89,7 @@
       "packages/twenty-agent-skills",
       "packages/twenty-oxlint-rules",
       "packages/twenty-claude-skills",
-      "packages/twenty-companion",
-      "packages/twenty-mobile"
+      "packages/twenty-companion"
     ]
   },
   "prettier": {
