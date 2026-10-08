@@ -23,6 +23,8 @@ concurrency:
 
 jobs:
   build:
+    # Upstream-only (twentyhq secrets / infra)
+    if: github.repository == 'twentyhq/twenty'
     permissions:
       contents: read
     runs-on: ubuntu-latest

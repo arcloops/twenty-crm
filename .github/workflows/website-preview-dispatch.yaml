@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   trigger-build:
+    # Upstream-only (twentyhq secrets / infra)
+    if: github.repository == 'twentyhq/twenty'
     # Same fork PRs from outside the org don't have `secrets.*` so the dispatch
     # call would fail anyway — skip explicitly to avoid noise.
     if: |

@@ -30,6 +30,8 @@ concurrency:
 
 jobs:
   desktop:
+    # Upstream-only (twentyhq secrets / infra)
+    if: github.repository == 'twentyhq/twenty'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
