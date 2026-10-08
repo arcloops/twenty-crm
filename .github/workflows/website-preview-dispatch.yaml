@@ -18,11 +18,10 @@ concurrency:
 
 jobs:
   trigger-build:
-    # Upstream-only (twentyhq secrets / infra)
-    if: github.repository == 'twentyhq/twenty'
-    # Same fork PRs from outside the org don't have `secrets.*` so the dispatch
-    # call would fail anyway — skip explicitly to avoid noise.
+    # Upstream-only (twentyhq secrets / infra). Same-repo PRs only —
+    # forks lack secrets.* so the dispatch would fail anyway.
     if: |
+      github.repository == 'twentyhq/twenty' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.action != 'closed' && (
         (github.event.action == 'labeled' && github.event.label.name == 'preview-website') ||
