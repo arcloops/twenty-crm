@@ -1,0 +1,17 @@
+# Arcloops CRM — Railway build hints.
+# Point the Railway service Dockerfile path at:
+#   packages/twenty-docker/twenty/Dockerfile
+#
+# Build time (25–30m) is dominated by nx front+server compile inside Docker.
+# Speedups:
+# 1) Enable Railway Docker layer cache / BuildKit cache mounts
+# 2) Or pre-build front on CI and bake packages/twenty-front/build into the context
+#    (the Dockerfile already skips nx build twenty-front when that folder exists)
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "packages/twenty-docker/twenty/Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

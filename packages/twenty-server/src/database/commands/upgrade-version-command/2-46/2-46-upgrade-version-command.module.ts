@@ -14,6 +14,7 @@ import { ScheduleAgentChatThreadSnoozeEndsCommand } from 'src/database/commands/
 import { UnpinNewAiChatCommandMenuItemCommand } from 'src/database/commands/upgrade-version-command/2-46/2-46-workspace-command-1790942019634-unpin-new-ai-chat-command-menu-item.command';
 import { TurnHiddenAgentMessagesIntoSystemMessagesCommand } from 'src/database/commands/upgrade-version-command/2-46/2-46-workspace-command-1791204952095-turn-hidden-agent-messages-into-system-messages.command';
 import { AddPersonOwnerFieldV246Command } from 'src/database/commands/upgrade-version-command/2-46/2-46-workspace-command-1791283320638-add-person-owner-field.command';
+import { SyncRecordShareObjectV246Command } from 'src/database/commands/upgrade-version-command/2-46/2-46-workspace-command-1791425100000-sync-record-share-object.command';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
@@ -39,6 +40,7 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
     DropWorkflowRunFromChatThreadsCommand,
     DropAgentTurnEvaluationObjectCommand,
     AddPersonOwnerFieldV246Command,
+    SyncRecordShareObjectV246Command,
   ],
 })
 export class V2_46_UpgradeVersionCommandModule {}

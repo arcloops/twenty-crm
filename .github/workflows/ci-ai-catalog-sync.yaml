@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   sync-catalog:
+    # Upstream-only; Arcloops does not sync Twenty's AI catalog
+    if: github.repository == 'twentyhq/twenty'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

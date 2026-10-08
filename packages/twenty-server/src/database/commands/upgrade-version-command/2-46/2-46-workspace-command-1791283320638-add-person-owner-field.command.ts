@@ -339,9 +339,27 @@ export class AddPersonOwnerFieldV246Command extends ProvisionedWorkspaceCommandR
       return;
     }
 
+    // Actor fields are stored as split columns, not a JSON `createdBy` object
+    const hasCreatedByWorkspaceMemberIdColumn = await dataSource.query(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = $1
+            AND table_name = 'person'
+            AND column_name = 'createdByWorkspaceMemberId'
+        ) AS "exists"
+      `,
+      [schemaName],
+    );
+
+    if (hasCreatedByWorkspaceMemberIdColumn[0]?.exists !== true) {
+      return;
+    }
+
     if (isDryRun) {
       this.logger.log(
-        `[DRY RUN] Would backfill person.ownerId from createdBy for workspace ${workspaceId}`,
+        `[DRY RUN] Would backfill person.ownerId from createdByWorkspaceMemberId for workspace ${workspaceId}`,
       );
 
       return;
@@ -350,9 +368,9 @@ export class AddPersonOwnerFieldV246Command extends ProvisionedWorkspaceCommandR
     const result = await dataSource.query(
       `
         UPDATE "${schemaName}"."person" AS person
-        SET "ownerId" = (person."createdBy"->>'workspaceMemberId')::uuid
+        SET "ownerId" = person."createdByWorkspaceMemberId"
         WHERE person."ownerId" IS NULL
-          AND person."createdBy"->>'workspaceMemberId' IS NOT NULL
+          AND person."createdByWorkspaceMemberId" IS NOT NULL
           AND person."deletedAt" IS NULL
       `,
     );

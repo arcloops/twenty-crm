@@ -2504,16 +2504,28 @@ export class WorkspaceRepository<TEntity extends ObjectLiteral = ObjectRecord> {
 
   private resolveRowAccessPolicyEnvironment(): RowAccessPolicyEnvironment &
     RowAccessCompilationEnvironment {
+    const recordShareObjectMetadataId =
+      this.options.internalContext.objectIdByNameSingular.recordShare;
+    const recordShareFeatureFlags = this.recordShareFeatureFlags;
+    // Visibility gating defaults on; without a provisioned recordShare object
+    // getTableExpression(undefined) throws "Could not find flat entity in maps".
+    const hasRecordShareObject = isDefined(recordShareObjectMetadataId);
+
     return {
       flatFieldMetadataMaps: this.options.internalContext.flatFieldMetadataMaps,
       flatObjectMetadataMaps:
         this.options.internalContext.flatObjectMetadataMaps,
-      recordShareTableExpression: this.getTableExpression(
-        this.options.internalContext.objectIdByNameSingular.recordShare,
-      ),
+      recordShareTableExpression: hasRecordShareObject
+        ? this.getTableExpression(recordShareObjectMetadataId)
+        : '',
       resolveTableExpression: (objectMetadataId) =>
         this.getTableExpression(objectMetadataId),
-      ...this.recordShareFeatureFlags,
+      ...recordShareFeatureFlags,
+      isRecordShareVisibilityGatingEnabled:
+        hasRecordShareObject &&
+        recordShareFeatureFlags.isRecordShareVisibilityGatingEnabled,
+      isRecordSharingEnabled:
+        hasRecordShareObject && recordShareFeatureFlags.isRecordSharingEnabled,
     };
   }
 

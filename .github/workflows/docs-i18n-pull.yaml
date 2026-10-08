@@ -33,6 +33,8 @@ concurrency:
 
 jobs:
   pull_docs_translations:
+    # Upstream-only; Arcloops manages translations out-of-band
+    if: github.repository == 'twentyhq/twenty'
     name: Pull docs translations
     runs-on: ubuntu-latest
     steps:
