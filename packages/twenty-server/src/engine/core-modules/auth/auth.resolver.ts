@@ -38,6 +38,8 @@ import { GetAuthTokenFromEmailVerificationTokenInput } from 'src/engine/core-mod
 import { GetAuthorizationUrlForSsoDTO } from 'src/engine/core-modules/auth/dto/get-authorization-url-for-sso.dto';
 import { GetAuthorizationUrlForSsoInput } from 'src/engine/core-modules/auth/dto/get-authorization-url-for-sso.input';
 import { InvalidatePasswordDTO } from 'src/engine/core-modules/auth/dto/invalidate-password.dto';
+import { UpdatePasswordDTO } from 'src/engine/core-modules/auth/dto/update-password.dto';
+import { SetCurrentUserPasswordInput } from 'src/engine/core-modules/auth/dto/set-current-user-password.input';
 import { SignUpDTO } from 'src/engine/core-modules/auth/dto/sign-up.dto';
 import { TransientTokenDTO } from 'src/engine/core-modules/auth/dto/transient-token.dto';
 import { UpdatePasswordViaResetTokenInput } from 'src/engine/core-modules/auth/dto/update-password-via-reset-token.input';
@@ -1192,6 +1194,32 @@ export class AuthResolver {
       userId: user.id,
       workspaceId: workspace.id,
       authProvider,
+    });
+  }
+
+  @Mutation(() => UpdatePasswordDTO)
+  @UseGuards(
+    AuthPrincipalGuard({
+      userSession: {
+        standard: true,
+        impersonated: false,
+        playground: false,
+        workspaceAgnostic: false,
+      },
+      apiKey: false,
+      oauthClient: false,
+      application: false,
+    }),
+    NoPermissionGuard,
+  )
+  async setCurrentUserPassword(
+    @AuthUser() user: AuthContextUser,
+    @Args() { newPassword, currentPassword }: SetCurrentUserPasswordInput,
+  ): Promise<UpdatePasswordDTO> {
+    return this.authService.setCurrentUserPassword({
+      userId: user.id,
+      newPassword,
+      currentPassword,
     });
   }
 

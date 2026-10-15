@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
 import { FileFolder, OpenRecordIn } from 'twenty-shared/types';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
@@ -679,7 +680,7 @@ export class UserWorkspaceService {
         appToken?: AppTokenEntity;
       }>;
     },
-    user: Pick<UserEntity, 'email'>,
+    user: Pick<UserEntity, 'email'> & Partial<Pick<UserEntity, 'passwordHash'>>,
     authProvider: AuthProviderEnum,
     canAutoLoginIntoWorkspaces = true,
   ) {
@@ -702,7 +703,9 @@ export class UserWorkspaceService {
                 ...(await this.castWorkspaceToAvailableWorkspace(workspace)),
                 loginToken:
                   canAutoLoginIntoWorkspaces &&
-                  workspaceValidator.isAuthEnabled(authProvider, workspace)
+                  (workspaceValidator.isAuthEnabled(authProvider, workspace) ||
+                    (authProvider === AuthProviderEnum.Password &&
+                      isNonEmptyString(user.passwordHash)))
                     ? (
                         await this.loginTokenService.generateLoginToken(
                           user.email,

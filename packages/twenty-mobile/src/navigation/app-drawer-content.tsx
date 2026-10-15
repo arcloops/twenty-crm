@@ -1,8 +1,13 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { DrawerContentScrollView } from 'expo-router/drawer';
-import { router, usePathname } from 'expo-router';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/auth-context';
@@ -12,10 +17,9 @@ import {
   DRAWER_INSIGHT_ITEMS,
   DRAWER_WORKSPACE_ITEMS,
   type AppNavItem,
-  openNavItem,
 } from '@/navigation/app-nav-config';
 import { useTheme } from '@/ui';
-import { radius, spacing } from '@/ui/theme';
+import { spacing } from '@/ui/theme';
 
 type AppDrawerContentProps = {
   navigation: {
@@ -28,60 +32,50 @@ const navigateFromDrawer = (
   closeDrawer: () => void,
 ) => {
   closeDrawer();
-  openNavItem(item);
+
+  if (item.href === '/(app)/objects/[plural]') {
+    router.push({
+      pathname: '/(app)/objects/[plural]',
+      params: { plural: item.params?.plural ?? 'people' },
+    });
+    return;
+  }
+
+  router.push(item.href);
 };
 
 type DrawerLinkProps = {
   item: AppNavItem;
-  isActive: boolean;
   onPress: () => void;
 };
 
-const DrawerLink = ({ item, isActive, onPress }: DrawerLinkProps) => {
+const DrawerLink = ({ item, onPress }: DrawerLinkProps) => {
   const theme = useTheme();
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected: isActive }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.link,
         {
-          backgroundColor: isActive
-            ? theme.accent.soft
-            : pressed
-              ? theme.background.tertiary
-              : 'transparent',
+          backgroundColor: pressed
+            ? theme.background.tertiary
+            : 'transparent',
         },
       ]}
     >
       <View
-        style={[
-          styles.iconWrap,
-          {
-            backgroundColor: isActive
-              ? theme.accent.primary
-              : theme.background.tertiary,
-          },
-        ]}
+        style={[styles.iconWrap, { backgroundColor: theme.accent.soft }]}
       >
         <Ionicons
           name={item.icon}
           size={18}
-          color={isActive ? theme.text.inverted : theme.accent.primary}
+          color={theme.accent.primary}
         />
       </View>
       <View style={styles.linkText}>
-        <Text
-          style={[
-            styles.linkTitle,
-            {
-              color: isActive ? theme.accent.primary : theme.text.primary,
-              fontWeight: isActive ? '700' : '500',
-            },
-          ]}
-        >
+        <Text style={[styles.linkTitle, { color: theme.text.primary }]}>
           {item.label}
         </Text>
         {item.subtitle ? (
@@ -97,11 +91,10 @@ const DrawerLink = ({ item, isActive, onPress }: DrawerLinkProps) => {
 type SectionProps = {
   title: string;
   items: AppNavItem[];
-  pathname: string;
   onSelect: (item: AppNavItem) => void;
 };
 
-const Section = ({ title, items, pathname, onSelect }: SectionProps) => {
+const Section = ({ title, items, onSelect }: SectionProps) => {
   const theme = useTheme();
 
   if (items.length === 0) {
@@ -113,30 +106,13 @@ const Section = ({ title, items, pathname, onSelect }: SectionProps) => {
       <Text style={[styles.sectionTitle, { color: theme.text.tertiary }]}>
         {title}
       </Text>
-      {items.map((item) => {
-        const href = String(item.href);
-        const isActive =
-          pathname === href ||
-          pathname.endsWith(`/${item.key}`) ||
-          (item.params?.plural
-            ? pathname.includes(`/objects/${item.params.plural}`) ||
-              pathname.includes(`objects/${item.params.plural}`)
-            : false) ||
-          (item.href === '/(app)/settings' && pathname.includes('/settings')) ||
-          (item.href === '/(app)/companies' && pathname.includes('/companies')) ||
-          (item.href === '/(app)/dashboards' &&
-            pathname.includes('/dashboards')) ||
-          (item.href === '/(app)/workflows' && pathname.includes('/workflows'));
-
-        return (
-          <DrawerLink
-            key={item.key}
-            item={item}
-            isActive={isActive}
-            onPress={() => onSelect(item)}
-          />
-        );
-      })}
+      {items.map((item) => (
+        <DrawerLink
+          key={item.key}
+          item={item}
+          onPress={() => onSelect(item)}
+        />
+      ))}
     </View>
   );
 };
@@ -144,33 +120,19 @@ const Section = ({ title, items, pathname, onSelect }: SectionProps) => {
 export const AppDrawerContent = ({ navigation }: AppDrawerContentProps) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
   const { user, signOut } = useAuth();
 
   const displayName =
-    [
-      user?.workspaceMember?.name?.firstName,
-      user?.workspaceMember?.name?.lastName,
-    ]
-      .filter(Boolean)
-      .join(' ') ||
+    user?.workspaceMember?.name?.firstName ||
     user?.firstName ||
     user?.email ||
     'User';
 
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-
   const closeDrawer = () => {
     navigation.closeDrawer();
   };
-
   return (
-    <DrawerContentScrollView
+    <ScrollView
       contentContainerStyle={[
         styles.container,
         {
@@ -180,62 +142,36 @@ export const AppDrawerContent = ({ navigation }: AppDrawerContentProps) => {
         },
       ]}
     >
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme.background.secondary,
-            borderColor: theme.border.primary,
-          },
-        ]}
-      >
-        <View
-          style={[styles.avatar, { backgroundColor: theme.accent.primary }]}
-        >
-          <Text style={[styles.avatarText, { color: theme.text.inverted }]}>
-            {initials || 'A'}
+      <View style={styles.header}>
+        <Text style={[styles.brand, { color: theme.text.primary }]}>
+          Arcloops CRM
+        </Text>
+        <Text style={{ color: theme.text.secondary }}>{displayName}</Text>
+        {user?.currentWorkspace?.displayName ? (
+          <Text style={{ color: theme.text.tertiary, fontSize: 13 }}>
+            {user.currentWorkspace.displayName}
           </Text>
-        </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.brand, { color: theme.text.primary }]}>
-            Arcloops CRM
-          </Text>
-          <Text style={{ color: theme.text.secondary }} numberOfLines={1}>
-            {displayName}
-          </Text>
-          {user?.currentWorkspace?.displayName ? (
-            <Text
-              style={{ color: theme.text.tertiary, fontSize: 13 }}
-              numberOfLines={1}
-            >
-              {user.currentWorkspace.displayName}
-            </Text>
-          ) : null}
-        </View>
+        ) : null}
       </View>
 
       <Section
         title="Daily"
         items={DRAWER_DAILY_ITEMS}
-        pathname={pathname}
         onSelect={(item) => navigateFromDrawer(item, closeDrawer)}
       />
       <Section
-        title="CRM"
+        title="More CRM"
         items={DRAWER_CRM_ITEMS}
-        pathname={pathname}
         onSelect={(item) => navigateFromDrawer(item, closeDrawer)}
       />
       <Section
         title="Insights"
         items={DRAWER_INSIGHT_ITEMS}
-        pathname={pathname}
         onSelect={(item) => navigateFromDrawer(item, closeDrawer)}
       />
       <Section
         title="Workspace"
         items={DRAWER_WORKSPACE_ITEMS}
-        pathname={pathname}
         onSelect={(item) => navigateFromDrawer(item, closeDrawer)}
       />
 
@@ -255,72 +191,56 @@ export const AppDrawerContent = ({ navigation }: AppDrawerContentProps) => {
           },
         ]}
       >
-        <Ionicons name="log-out-outline" size={18} color={theme.text.danger} />
+        <Ionicons
+          name="log-out-outline"
+          size={18}
+          color={theme.text.danger}
+        />
         <Text style={{ color: theme.text.danger, fontWeight: '600' }}>
           Sign out
         </Text>
       </Pressable>
-    </DrawerContentScrollView>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    gap: spacing(2),
-    paddingHorizontal: spacing(3),
   },
   header: {
-    alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing(3),
-    marginBottom: spacing(2),
-    padding: spacing(3),
-  },
-  avatar: {
-    alignItems: 'center',
-    borderRadius: 22,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  headerText: {
-    flex: 1,
     gap: 2,
+    marginBottom: spacing(4),
+    paddingHorizontal: spacing(4),
   },
   brand: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '700',
+    marginBottom: spacing(1),
   },
   section: {
-    gap: spacing(0.5),
-    marginTop: spacing(1),
+    marginBottom: spacing(3),
+    paddingHorizontal: spacing(2),
   },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
     marginBottom: spacing(1),
+    marginLeft: spacing(2),
     textTransform: 'uppercase',
   },
   link: {
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: 10,
     flexDirection: 'row',
-    gap: spacing(2),
-    minHeight: 48,
+    gap: spacing(3),
     paddingHorizontal: spacing(2),
-    paddingVertical: spacing(1.5),
+    paddingVertical: spacing(2),
   },
   iconWrap: {
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: 8,
     height: 32,
     justifyContent: 'center',
     width: 32,
@@ -331,14 +251,16 @@ const styles = StyleSheet.create({
   },
   linkTitle: {
     fontSize: 15,
+    fontWeight: '600',
   },
   signOut: {
     alignItems: 'center',
-    borderRadius: radius.lg,
+    borderRadius: 10,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing(2),
-    marginTop: spacing(3),
+    marginHorizontal: spacing(4),
+    marginTop: spacing(2),
     paddingHorizontal: spacing(3),
     paddingVertical: spacing(3),
   },

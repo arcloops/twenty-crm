@@ -185,6 +185,7 @@ exports[`endpoint permission declarations should match the AuthPrincipalGuard an
   "AuthResolver.getLoginTokenFromCredentials {"applicationTarget":null,"authPrincipalGuards":[]}",
   "AuthResolver.getWorkspaceCreationDefaults {"applicationTarget":null,"authPrincipalGuards":[{"apiKey":false,"application":{"withUser":true,"withoutUser":false},"oauthClient":{"withUser":true,"withoutUser":false},"userSession":true}]}",
   "AuthResolver.renewToken {"applicationTarget":null,"authPrincipalGuards":[]}",
+  "AuthResolver.setCurrentUserPassword {"applicationTarget":null,"authPrincipalGuards":[{"apiKey":false,"application":false,"oauthClient":false,"userSession":{"impersonated":false,"playground":false,"standard":true,"workspaceAgnostic":false}}]}",
   "AuthResolver.signIn {"applicationTarget":null,"authPrincipalGuards":[]}",
   "AuthResolver.signOut {"applicationTarget":null,"authPrincipalGuards":[]}",
   "AuthResolver.signUp {"applicationTarget":null,"authPrincipalGuards":[]}",

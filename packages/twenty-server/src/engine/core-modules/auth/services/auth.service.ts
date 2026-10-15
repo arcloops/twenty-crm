@@ -140,6 +140,11 @@ export class AuthService {
       return;
     }
 
+    // Microsoft (and other SSO) users can set a password from profile and then sign in with it
+    if (isNonEmptyString(user.passwordHash)) {
+      return;
+    }
+
     const canBypass = await this.canUserBypassAuthProvider({
       user,
       workspace,
@@ -301,6 +306,14 @@ export class AuthService {
           workspace,
           provider: authParams.provider,
         }))
+      ) {
+        return;
+      }
+
+      if (
+        authParams.provider === AuthProviderEnum.Password &&
+        existingUser &&
+        isNonEmptyString(existingUser.passwordHash)
       ) {
         return;
       }
@@ -768,6 +781,60 @@ export class AuthService {
       subject,
       text,
       html,
+    });
+
+    return { success: true };
+  }
+
+  async setCurrentUserPassword({
+    userId,
+    newPassword,
+    currentPassword,
+  }: {
+    userId: string;
+    newPassword: string;
+    currentPassword?: string;
+  }): Promise<UpdatePasswordDTO> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!isDefined(user)) {
+      throw new AuthException(
+        'User not found',
+        AuthExceptionCode.USER_NOT_FOUND,
+      );
+    }
+
+    if (isNonEmptyString(user.passwordHash)) {
+      if (!isNonEmptyString(currentPassword)) {
+        throw new AuthException(
+          'Current password is required',
+          AuthExceptionCode.INVALID_INPUT,
+          {
+            userFriendlyMessage: msg`Enter your current password.`,
+          },
+        );
+      }
+
+      await assertUserPasswordIsValidOrThrow({
+        user,
+        password: currentPassword,
+      });
+    }
+
+    if (!PASSWORD_REGEX.test(newPassword)) {
+      throw new AuthException(
+        'Password is too weak',
+        AuthExceptionCode.INVALID_INPUT,
+        {
+          userFriendlyMessage: msg`Password is too weak.`,
+        },
+      );
+    }
+
+    await this.userRepository.update(userId, {
+      passwordHash: await hashPassword(newPassword),
     });
 
     return { success: true };

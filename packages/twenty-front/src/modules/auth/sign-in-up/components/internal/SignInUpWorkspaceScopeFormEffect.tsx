@@ -95,7 +95,7 @@ export const SignInUpWorkspaceScopeFormEffect = () => {
       signInUpStep !== SignInUpStep.Password &&
       signInUpStep !== SignInUpStep.Email &&
       isDefined(email) &&
-      workspaceAuthProviders.password &&
+      (workspaceAuthProviders.password || workspaceAuthProviders.microsoft) &&
       loadingStatus === LoadingStatus.Done
     ) {
       continueWithCredentials();

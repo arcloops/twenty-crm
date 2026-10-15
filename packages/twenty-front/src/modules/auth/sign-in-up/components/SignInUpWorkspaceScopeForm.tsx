@@ -55,10 +55,10 @@ export const SignInUpWorkspaceScopeForm = () => {
         {(providers.google ||
           providers.microsoft ||
           providers.sso.length > 0) &&
-        providers.password ? (
+        (providers.password || providers.microsoft) ? (
           <HorizontalSeparator />
         ) : null}
-        {providers.password && (
+        {(providers.password || providers.microsoft) && (
           // oxlint-disable-next-line react/jsx-props-no-spreading
           <FormProvider {...form}>
             <SignInUpWithCredentials />
