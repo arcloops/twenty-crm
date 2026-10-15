@@ -1,5 +1,6 @@
 import { styled } from '@linaria/react';
 import { gql } from '@apollo/client';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -52,8 +53,8 @@ export const SetOrChangePassword = () => {
 
   const heading = hasPassword ? t`Change Password` : t`Set Password`;
   const description = hasPassword
-    ? t`Update the password you use to sign in with email`
-    : t`Add a password so you can also sign in with email. This works for accounts created with Microsoft.`;
+    ? t`Change password`
+    : t`Allow users to sign in with an email and password.`;
 
   const handleSubmit = async () => {
     if (!PASSWORD_REGEX.test(newPassword)) {
@@ -84,7 +85,7 @@ export const SetOrChangePassword = () => {
       const { data } = await setCurrentUserPassword({
         variables: {
           newPassword,
-          currentPassword: hasPassword ? currentPassword : null,
+          ...(hasPassword ? { currentPassword } : {}),
         },
       });
 
@@ -103,11 +104,21 @@ export const SetOrChangePassword = () => {
       enqueueToast({
         variant: 'success',
         children: hasPassword
-          ? t`Password updated`
-          : t`Password set. You can now sign in with email and this password.`,
+          ? t`Password has been updated`
+          : t`Password has been set`,
       });
     } catch (error) {
-      enqueueToast(getToastOptionsFromError({ error }));
+      const graphqlMessage = CombinedGraphQLErrors.is(error)
+        ? error.errors[0]?.message
+        : undefined;
+
+      enqueueToast({
+        ...(getToastOptionsFromError({ error }) ?? {
+          variant: 'error',
+          children: t`An error occurred.`,
+        }),
+        ...(graphqlMessage ? { children: graphqlMessage } : {}),
+      });
     }
   };
 
@@ -118,7 +129,7 @@ export const SetOrChangePassword = () => {
         {hasPassword ? (
           <SettingsTextInput
             instanceId="settings-current-password"
-            label={t`Current password`}
+            label={t`Password`}
             value={currentPassword}
             type="password"
             fullWidth
@@ -127,7 +138,7 @@ export const SetOrChangePassword = () => {
         ) : null}
         <SettingsTextInput
           instanceId="settings-new-password"
-          label={t`New password`}
+          label={t`New Password`}
           value={newPassword}
           type="password"
           fullWidth
@@ -135,7 +146,7 @@ export const SetOrChangePassword = () => {
         />
         <SettingsTextInput
           instanceId="settings-confirm-password"
-          label={t`Confirm password`}
+          label={t`Confirm`}
           value={confirmPassword}
           type="password"
           fullWidth
