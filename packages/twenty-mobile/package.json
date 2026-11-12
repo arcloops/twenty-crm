@@ -3,34 +3,42 @@
   "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "ios:device": "expo run:ios --device",
+    "ios:prebuild": "expo prebuild --platform ios --clean",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ios": "EAS_NO_VCS=1 EAS_PROJECT_ROOT=\"$(pwd)\" eas build --profile production --platform ios",
+    "build:ios:monorepo": "eas build --profile production --platform ios",
+    "build:ios:local": "EAS_NO_VCS=1 EAS_PROJECT_ROOT=\"$(pwd)\" eas build --profile production --platform ios --local",
+    "submit:ios": "eas submit --profile production --platform ios",
+    "build:inspect": "EAS_NO_VCS=1 EAS_PROJECT_ROOT=\"$(pwd)\" eas build:inspect --platform ios --profile production --stage archive --output /tmp/eas-mobile-archive"
   },
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@expo/vector-icons": "^15.0.3",
     "@lingui/core": "^5.9.5",
     "@lingui/react": "^5.9.5",
-    "@react-native-community/netinfo": "11.4.1",
-    "@react-navigation/drawer": "^7.14.3",
-    "@react-navigation/native": "^7.5.0",
-    "expo": "~57.0.26",
-    "expo-application": "~7.0.8",
-    "expo-auth-session": "~57.0.7",
-    "expo-constants": "~57.0.20",
-    "expo-crypto": "~57.0.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo": "~57.0.32",
+    "expo-application": "~57.0.3",
+    "expo-auth-session": "~57.0.16",
+    "expo-constants": "~57.0.23",
+    "expo-crypto": "~57.0.4",
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
-    "expo-image-picker": "^57.0.20",
-    "expo-linking": "~57.0.11",
-    "expo-router": "~57.0.24",
+    "expo-image-picker": "~57.0.21",
+    "expo-linking": "~57.0.13",
+    "expo-router": "~57.0.30",
     "expo-secure-store": "~57.0.4",
-    "expo-splash-screen": "~57.0.9",
+    "expo-splash-screen": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
@@ -55,5 +63,12 @@
     "@types/react": "~19.2.2",
     "babel-preset-expo": "~57.0.0",
     "typescript": "~5.9.2"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "typescript"
+      ]
+    }
   }
 }

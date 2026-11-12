@@ -1,0 +1,31 @@
+# Used when building with EAS_NO_VCS=1 (archive root = this package).
+# When .easignore exists, .gitignore is NOT applied — copy those rules here.
+
+/node_modules/
+/.expo/
+/dist/
+/web-build/
+/ios/
+/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.env
+.env.*
+!.env.example
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+expo-env.d.ts
+
+# Extra non-runtime bulk
+assets/pack/
+assets/images/_backup-twenty-defaults/
+.maestro/
+*.md
+!README.md

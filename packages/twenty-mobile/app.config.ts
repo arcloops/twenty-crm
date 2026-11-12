@@ -4,10 +4,13 @@ import { join } from 'node:path';
 import { type ConfigContext } from 'expo/config';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
-const easProjectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+// Public Expo project id — hardcoded so `eas` can link without writing dynamic config
+const EAS_PROJECT_ID = '5821493b-0911-4b52-9f15-b8e241e40f8f';
+const easProjectId =
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim() || EAS_PROJECT_ID;
 const privacyPolicyUrl =
   process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL?.trim() ||
-  'https://twenty.com/legal/privacy';
+  'https://www.arcloops.ai/privacy';
 
 const mobilePackageJson = join(
   process.cwd().endsWith('twenty-mobile')
@@ -73,7 +76,17 @@ export default ({ config }: ConfigContext) => {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'io.arcloops.crm',
+      config: {
+        usesNonExemptEncryption: false,
+      },
       infoPlist: {
+        CADisableMinimumFrameDurationOnPhone: true,
+        ITSAppUsesNonExemptEncryption: false,
+        UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
+        'UISupportedInterfaceOrientations~ipad': [
+          'UIInterfaceOrientationPortrait',
+          'UIInterfaceOrientationPortraitUpsideDown',
+        ],
         NSCameraUsageDescription:
           'Photograph front and back of business cards to create People.',
         NSPhotoLibraryUsageDescription:
@@ -81,6 +94,15 @@ export default ({ config }: ConfigContext) => {
         CFBundleURLTypes: [
           {
             CFBundleURLSchemes: ['twenty'],
+          },
+        ],
+      },
+      privacyManifests: {
+        NSPrivacyAccessedAPITypes: [
+          {
+            NSPrivacyAccessedAPIType:
+              'NSPrivacyAccessedAPICategoryUserDefaults',
+            NSPrivacyAccessedAPITypeReasons: ['CA92.1'],
           },
         ],
       },
@@ -124,7 +146,7 @@ export default ({ config }: ConfigContext) => {
         process.env.EXPO_PUBLIC_TWENTY_ORIGIN ?? 'https://crm.arcloops.io',
       privacyPolicyUrl,
       eas: {
-        projectId: easProjectId || undefined,
+        projectId: easProjectId,
       },
     },
   };

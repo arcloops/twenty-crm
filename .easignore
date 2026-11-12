@@ -1,32 +1,66 @@
-# Standalone Arcloops mobile app lives in packages/twenty-mobile (npm).
-# Upload only what that app needs — not the Twenty yarn monorepo.
-**/**/.env
-.DS_Store
-**/**/node_modules/
-.cache
+# IMPORTANT: When .easignore exists, EAS ignores .gitignore entirely.
+# EAS runs from packages/twenty-mobile but archives the git root, then
+# cds into packages/twenty-mobile — that folder MUST be present.
+
+# Secrets / local env
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies & caches
+**/node_modules/
+.cache/
 .nx/
 .pnp.*
 .yarn/
+**/.expo/
+**/dist/
+**/web-build/
+**/coverage/
+
+# Monorepo package manager (mobile uses npm + package-lock.json)
 /yarn.lock
 /yarn.config.cjs
 /.yarnrc.yml
 /nx.json
 
-# Drop every package except twenty-mobile
-/packages/*
-!/packages/twenty-mobile/
-!/packages/twenty-mobile/**
+# Ignore sibling packages — keep only twenty-mobile.
+# Do NOT use `/packages/*` + negation; EAS leaves packages/twenty-mobile empty.
+/packages/create-twenty-app/
+/packages/twenty-agent-skills/
+/packages/twenty-apps/
+/packages/twenty-claude-skills/
+/packages/twenty-cli/
+/packages/twenty-client-sdk/
+/packages/twenty-companion/
+/packages/twenty-docker/
+/packages/twenty-docs/
+/packages/twenty-e2e-testing/
+/packages/twenty-emails/
+/packages/twenty-front/
+/packages/twenty-front-component-renderer/
+/packages/twenty-oxlint-rules/
+/packages/twenty-sdk/
+/packages/twenty-server/
+/packages/twenty-shared/
+/packages/twenty-ui/
+/packages/twenty-utils/
+/packages/twenty-website/
+/packages/twenty-zapier/
 
-# Still drop heavy / non-runtime bits inside the mobile app
+# Heavy / non-runtime bits inside the mobile app
 /packages/twenty-mobile/assets/pack/
 /packages/twenty-mobile/assets/images/_backup-twenty-defaults/
 /packages/twenty-mobile/.maestro/
-/packages/twenty-mobile/node_modules/
-/packages/twenty-mobile/.expo/
 /packages/twenty-mobile/ios/
 /packages/twenty-mobile/android/
+/packages/twenty-mobile/node_modules/
+/packages/twenty-mobile/.expo/
 
+# Repo chrome not needed on the builder
 /.github/
 /.vscode/
 /.cursor/
+/.claude/
 /docs/
+/scripts/

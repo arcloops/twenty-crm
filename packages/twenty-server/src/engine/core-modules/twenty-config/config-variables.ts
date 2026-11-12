@@ -1530,6 +1530,17 @@ export class ConfigVariables {
   @IsOptional()
   WORKER_EXCLUDED_QUEUES: string[] = [];
 
+  // Env-only + read at Nest module load (process.env) — Admin DB toggle cannot enable this.
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'When true, the API server also consumes BullMQ queues (no separate worker process). Env-only; set before process start. Do not also run yarn worker:prod.',
+    isEnvOnly: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  RUN_WORKERS_IN_SERVER = false;
+
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.SERVER_CONFIG,
     description: 'Node environment (development, production, etc.)',

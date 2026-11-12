@@ -19,6 +19,7 @@ import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handl
 import { ExceptionHandlerMockService } from 'src/engine/core-modules/exception-handler/mocks/exception-handler-mock.service';
 import { JobsModule } from 'src/engine/core-modules/message-queue/jobs.module';
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
+import { shouldRunWorkersInServer } from 'src/engine/core-modules/message-queue/utils/should-run-workers-in-server.util';
 
 interface TestingModuleCreatePreHook {
   (moduleBuilder: TestingModuleBuilder): TestingModuleBuilder;
@@ -36,8 +37,12 @@ export const createApp = async (
 ): Promise<NestExpressApplication> => {
   const stripeSDKMockService = new StripeSDKMockService();
   const mockExceptionHandlerService = new ExceptionHandlerMockService();
+  // AppModule already registers explorer + JobsModule when RUN_WORKERS_IN_SERVER
+  const workerImports = shouldRunWorkersInServer()
+    ? []
+    : [JobsModule, MessageQueueModule.registerExplorer()];
   let moduleBuilder: TestingModuleBuilder = Test.createTestingModule({
-    imports: [AppModule, JobsModule, MessageQueueModule.registerExplorer()],
+    imports: [AppModule, ...workerImports],
   })
     .overrideProvider(StripeSDKService)
     .useValue(stripeSDKMockService)

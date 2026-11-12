@@ -26,6 +26,7 @@ import { AppModule } from './app.module';
 import './instrument';
 
 import { settings } from './engine/constants/settings';
+import { shouldRunWorkersInServer } from './engine/core-modules/message-queue/utils/should-run-workers-in-server.util';
 import { enableValidationMetadataCache } from './utils/enable-validation-metadata-cache.util';
 
 const bootstrap = async () => {
@@ -109,10 +110,29 @@ const bootstrap = async () => {
   httpServer.headersTimeout = keepAliveTimeout + 1000;
 
   const usageRecorder = app.get(UsageRecorderService);
+  const runWorkersInServer = shouldRunWorkersInServer();
+
+  // Match queue-worker bootstrap so BullMQ workers close on deploy restarts
+  if (runWorkersInServer) {
+    app.enableShutdownHooks();
+    logger.log(
+      'RUN_WORKERS_IN_SERVER=true — BullMQ consumers run in this process',
+      'Bootstrap',
+    );
+  }
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {
-      void usageRecorder.flushAndStop().finally(() => process.exit(0));
+      void (async () => {
+        try {
+          await usageRecorder.flushAndStop();
+          if (runWorkersInServer) {
+            await app.close();
+          }
+        } finally {
+          process.exit(0);
+        }
+      })();
     });
   }
 

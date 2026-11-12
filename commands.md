@@ -86,8 +86,32 @@ App Store Connect Apple ID `6820139033`. EAS Node **22**.
 ```bash
 cd packages/twenty-mobile
 eas credentials    # first time
-npm run build:ios  # eas build --profile production --platform ios
+npm run build:ios  # uploads this package only (EAS_NO_VCS + EAS_PROJECT_ROOT)
 npm run submit:ios
+
+# Optional: compile on this Mac (needs Xcode + ~20GB free)
+npm run build:ios:local
+
+# Debug what EAS would upload
+npm run build:inspect && ls /tmp/eas-mobile-archive/package.json
 ```
 
+Always run from `packages/twenty-mobile`. Root `.easignore` also keeps `packages/twenty-mobile` if a monorepo upload is used (`npm run build:ios:monorepo`).
+
 Then TestFlight → Internal Testing → install via the TestFlight app.
+
+---
+
+## Railway cost (8–10 users)
+
+See **[deploy.md](./deploy.md)** — Google-only auth/sync, `RUN_WORKERS_IN_SERVER=true` (drop separate worker), memory limits, sleep policy.
+
+```bash
+# Env template + small-team compose
+cp packages/twenty-docker/arcloops.env.example packages/twenty-docker/.env
+# fill Google + secrets, then:
+# docker compose -f packages/twenty-docker/docker-compose.arcloops.yml --env-file packages/twenty-docker/.env up -d
+
+# After flipping providers, clear stale cron keys then restart API
+bash packages/twenty-docker/scripts/clear-stale-bullmq-repeatables.sh "$REDIS_URL"
+```

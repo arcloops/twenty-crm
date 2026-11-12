@@ -193,7 +193,7 @@ Confirm password login against production API. Password auth is the simplest fir
 
 ## 6. Build the store IPA
 
-Mobile is a **standalone npm app** (`package-lock.json`). EAS uses Node **22.14.0** — independent of the Twenty monorepo’s Node 24 / Yarn constraints. Root `.easignore` uploads only `packages/twenty-mobile`.
+Mobile is a **standalone npm app** (`package-lock.json`). EAS uses Node **22.14.0** — independent of the Twenty monorepo’s Node 24 / Yarn constraints. Prefer `npm run build:ios` (`EAS_NO_VCS=1`) so the archive is only this package. Root `.easignore` also keeps `packages/twenty-mobile` if a monorepo upload is used.
 
 ```bash
 cd packages/twenty-mobile
@@ -355,10 +355,10 @@ Marketing version lives in `packages/twenty-mobile/app.config.ts` (`version: '0.
 ```bash
 cd packages/twenty-mobile
 
-# 1. Bump version in app.config.ts when you want a new store version (e.g. 0.1.0 → 0.1.1 or 0.2.0)
-# 2. Rebuild + submit
-eas build --profile production --platform ios
-eas submit --profile production --platform ios
+# 1. Bump version in app.config.ts when you want a new store version (e.g. 1.0.0 → 1.0.1)
+# 2. Rebuild + submit (use npm scripts — they set EAS_NO_VCS / EAS_PROJECT_ROOT)
+npm run build:ios
+npm run submit:ios
 
 # 3. In App Store Connect: create new version if needed → select new build → TestFlight → then Submit for Review
 ```
@@ -394,6 +394,7 @@ npm run submit:ios
 | Gotcha                             | Fix                                                                       |
 | ---------------------------------- | ------------------------------------------------------------------------- |
 | Using monorepo `yarn` for mobile   | Use `cd packages/twenty-mobile && npm …` — not a Yarn workspace           |
+| `package.json does not exist in …/packages/twenty-mobile` | Root `.easignore` was dropping the app; use `npm run build:ios` (EAS_NO_VCS) |
 | Using `preview` for TestFlight     | Use `production` only for App Store / TestFlight store builds             |
 | API pointed at SPA                 | Set `EXPO_PUBLIC_TWENTY_API_URL=https://crm-api.arcloops.io`              |
 | Privacy URL still Twenty’s default | Set `EXPO_PUBLIC_PRIVACY_POLICY_URL` to yours (local + EAS env)           |
@@ -411,8 +412,8 @@ npm run submit:ios
 
 1. Register Bundle ID `io.arcloops.crm` + create ASC app
 2. `eas login` + `eas init` + local `.env` + EAS production env vars
-3. `eas build --profile production --platform ios`
-4. `eas submit --profile production --platform ios`
+3. `npm run build:ios`
+4. `npm run submit:ios`
 5. Answer compliance → Internal TestFlight → install on your iPhone
 6. Fill store listing + screenshots + review demo login
 7. Submit for App Review → release when approved

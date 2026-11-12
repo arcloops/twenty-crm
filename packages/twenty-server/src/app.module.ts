@@ -37,6 +37,9 @@ import { ModulesModule } from 'src/modules/modules.module';
 import { ClickHouseModule } from './database/clickhouse/clickhouse.module';
 import { CoreEngineModule } from './engine/core-modules/core-engine.module';
 import { I18nModule } from './engine/core-modules/i18n/i18n.module';
+import { JobsModule } from './engine/core-modules/message-queue/jobs.module';
+import { MessageQueueModule } from './engine/core-modules/message-queue/message-queue.module';
+import { shouldRunWorkersInServer } from './engine/core-modules/message-queue/utils/should-run-workers-in-server.util';
 
 // TODO: Remove this middleware when all the rest endpoints are migrated to TwentyORM
 const MIGRATED_REST_METHODS = [
@@ -72,6 +75,10 @@ const MIGRATED_REST_METHODS = [
     WorkspaceMetadataVersionModule,
     I18nModule,
     FrontendModule,
+    // Small-team memory mode: API Nest also consumes BullMQ (no yarn worker:prod)
+    ...(shouldRunWorkersInServer()
+      ? [MessageQueueModule.registerExplorer(), JobsModule]
+      : []),
   ],
   providers: [
     {
