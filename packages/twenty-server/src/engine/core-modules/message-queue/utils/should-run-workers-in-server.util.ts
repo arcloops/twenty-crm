@@ -1,7 +1,28 @@
+import { resolve } from 'path';
+
+import { config } from 'dotenv';
+
 import { configTransformers } from 'src/engine/core-modules/twenty-config/utils/config-transformers.util';
 
-// Nest @Module imports are fixed when this file loads, before ConfigModule
-// hydrates .env — so Railway/Docker must inject RUN_WORKERS_IN_SERVER into
-// the process environment. Accept the same truthy strings as ConfigVariables.
-export const shouldRunWorkersInServer = (): boolean =>
-  configTransformers.boolean(process.env.RUN_WORKERS_IN_SERVER) === true;
+let didLoadDotenv = false;
+
+// Nest @Module imports are fixed when AppModule loads, before ConfigModule
+// runs — so this gate cannot use TwentyConfigService. Load .env once (without
+// overriding already-injected Railway/Docker env) for local `yarn start`.
+const ensureProcessEnvLoaded = (): void => {
+  if (didLoadDotenv) {
+    return;
+  }
+
+  didLoadDotenv = true;
+  const envFilePath =
+    process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+
+  config({ path: resolve(process.cwd(), envFilePath) });
+};
+
+export const shouldRunWorkersInServer = (): boolean => {
+  ensureProcessEnvLoaded();
+
+  return configTransformers.boolean(process.env.RUN_WORKERS_IN_SERVER) === true;
+};
